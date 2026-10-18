@@ -2,8 +2,6 @@
 
 Local-first desktop app for capturing what you learn each day. Add short points to a folder's scratchpad; an LLM organises them into subtopic notes with explanations and web-sourced extras, and **your own points stay highlighted** and are never altered.
 
-See `docs/PRD.md` (what and why) and `docs/HLD.md` (how).
-
 ## Run
 
 ```bash
