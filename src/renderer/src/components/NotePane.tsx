@@ -1,8 +1,20 @@
 import { useEffect, useState } from 'react';
+import type { JobView } from '@shared/ipc';
 import type { ResolvedNote, SubtopicInfo } from '@shared/types';
 import { lode, unwrap } from '../api';
 import { LlmBlock, PointBlock, RawBlock } from './Blocks';
-import { ChevronRightIcon, HashIcon, NoteIcon } from './Icons';
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ChevronRightIcon,
+  DotsIcon,
+  HashIcon,
+  NoteIcon,
+  RefreshIcon,
+  TrashIcon,
+  UndoIcon,
+} from './Icons';
+import { Menu } from './Menu';
 
 interface Props {
   vaultId: string | null;
@@ -11,9 +23,22 @@ interface Props {
   subtopics: SubtopicInfo[];
   active: string | null;
   version: number;
-  onSelect(slug: string): void;
+  /** `null` shows the folder's subtopic overview. */
+  onSelect(slug: string | null): void;
   onError(msg: string): void;
   onJumpToPoint(id: string): void;
+  canBack: boolean;
+  canForward: boolean;
+  onBack(): void;
+  onForward(): void;
+  /** A queued or running Regenerate of the open note, if any. */
+  regenJob: JobView | undefined;
+  onRegenerate(slug: string, title: string): void;
+  onOpenJob(jobId: string): void;
+  onUndoRegenerate(slug: string): Promise<void>;
+  onDelete(slug: string, title: string): void;
+  onEditPoint(id: string, text: string): Promise<boolean>;
+  onSetPointDeleted(id: string, deleted: boolean): Promise<void>;
 }
 
 function relative(iso: string): string {
@@ -45,21 +70,86 @@ export function NotePane(p: Props): React.JSX.Element {
 
   const shown = note && active && note.slug === active && note.folder === folder ? note : null;
   const mine = shown?.blocks.filter((b) => b.kind === 'point').length ?? 0;
-  const ai = shown?.blocks.filter((b) => b.kind === 'llm').length ?? 0;
+  const ai = shown?.blocks.filter((b) => b.kind === 'llm' && !b.duplicate).length ?? 0;
 
   return (
     <aside className="note-pane" aria-label="Notes">
       <div className="pane-bar">
-        {p.folderTitle && (
-          <nav className="crumbs" aria-label="Breadcrumb">
-            <span>{p.folderTitle}</span>
-            {shown && (
-              <>
-                <ChevronRightIcon size={12} />
-                <span className="crumb-current">{shown.title}</span>
-              </>
+        <div className="pane-nav">
+          <button className="icon-btn" aria-label="Back" title="Back (Alt+←)" disabled={!p.canBack} onClick={p.onBack}>
+            <ArrowLeftIcon size={15} />
+          </button>
+          <button
+            className="icon-btn"
+            aria-label="Forward"
+            title="Forward (Alt+→)"
+            disabled={!p.canForward}
+            onClick={p.onForward}
+          >
+            <ArrowRightIcon size={15} />
+          </button>
+          {p.folderTitle && (
+            <nav className="crumbs" aria-label="Breadcrumb">
+              {shown ? (
+                <button className="crumb-link" onClick={() => p.onSelect(null)} title="All subtopics in this folder">
+                  {p.folderTitle}
+                </button>
+              ) : (
+                <span className="crumb-current" aria-current="page">
+                  {p.folderTitle}
+                </span>
+              )}
+              {shown && (
+                <>
+                  <ChevronRightIcon size={12} />
+                  <span className="crumb-current" aria-current="page">
+                    {shown.title}
+                  </span>
+                </>
+              )}
+            </nav>
+          )}
+        </div>
+        {shown && (
+          <div className="note-actions">
+            {p.regenJob ? (
+              <button className="btn" onClick={() => p.regenJob && p.onOpenJob(p.regenJob.id)}>
+                <span className="spinner small" aria-hidden="true" />
+                {p.regenJob.status === 'queued' ? 'Queued' : 'Regenerating…'}
+              </button>
+            ) : (
+              <button
+                className="btn"
+                onClick={() => p.onRegenerate(shown.slug, shown.title)}
+                title="Rewrite this note's AI sections from all of its points"
+              >
+                <RefreshIcon size={14} /> Regenerate
+              </button>
             )}
-          </nav>
+            <Menu
+              label="Note actions"
+              trigger={<DotsIcon size={15} />}
+              align="end"
+              items={[
+                ...(shown.canUndo
+                  ? [
+                      {
+                        label: 'Undo regenerate',
+                        icon: <UndoIcon size={14} />,
+                        onSelect: () => void p.onUndoRegenerate(shown.slug),
+                      },
+                      'separator' as const,
+                    ]
+                  : []),
+                {
+                  label: 'Move to trash',
+                  icon: <TrashIcon size={14} />,
+                  danger: true,
+                  onSelect: () => p.onDelete(shown.slug, shown.title),
+                },
+              ]}
+            />
+          </div>
         )}
       </div>
 
@@ -76,7 +166,13 @@ export function NotePane(p: Props): React.JSX.Element {
             <div className="blocks">
               {shown.blocks.map((b, i) =>
                 b.kind === 'point' ? (
-                  <PointBlock key={`${b.id}-${i}`} block={b} onJump={p.onJumpToPoint} />
+                  <PointBlock
+                    key={`${b.id}-${i}`}
+                    block={b}
+                    onJump={p.onJumpToPoint}
+                    onEdit={p.onEditPoint}
+                    onSetDeleted={p.onSetPointDeleted}
+                  />
                 ) : b.kind === 'llm' ? (
                   <LlmBlock key={`${b.id}-${i}`} block={b} />
                 ) : (

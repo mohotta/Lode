@@ -147,7 +147,7 @@ describe('backlog capture', () => {
     expect(unfiled.map((p) => p.id)).toEqual([a.id, c.id]);
     expect(Object.isFrozen(unfiled)).toBe(true);
     expect(Object.isFrozen(unfiled[0])).toBe(true);
-    expect(Object.keys(ro).sort()).toEqual(['get', 'listUnfiled']);
+    expect(Object.keys(ro).sort()).toEqual(['get', 'listLive', 'listUnfiled']);
     expect((await ro.get(c.id))?.text).toBe('c');
     expect(await ro.get('p-nonexist')).toBeUndefined();
   });

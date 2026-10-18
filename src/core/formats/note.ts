@@ -31,7 +31,7 @@ const POINT_LINE_RE = /^\{\{point:(p-[0-9a-z]{8})\}\}$/;
 const LLM_OPEN_RE = /^::llm\{(.*)\}$/;
 const LLM_CLOSE = '::';
 const ATTR_RE = /([a-zA-Z][\w-]*)=(?:"([^"]*)"|([^\s"}]+))/g;
-const BARE_ATTRS = new Set(['id', 'kind', 'for']);
+const BARE_ATTRS = new Set(['id', 'kind', 'for', 'of']);
 const LINK_RE = /\[([^\]\n]*)\]\((https?:\/\/[^\s)]+)\)/g;
 
 export function parseAttrs(raw: string): Record<string, string> {
@@ -90,6 +90,7 @@ export function parseNoteBody(body: string): Block[] {
         const attrs = parseAttrs(open[1] ?? '');
         const content = lines.slice(i + 1, close).join('\n');
         const forId = attrs.for;
+        const ofId = attrs.of;
         blocks.push({
           kind: 'llm',
           id: attrs.id ?? '',
@@ -98,6 +99,9 @@ export function parseNoteBody(body: string): Block[] {
           body: content,
           sources: extractSources(content),
           ...(attrs.kind === 'correction' && forId && isPointId(forId) ? { correctionFor: forId } : {}),
+          ...(attrs.kind === 'duplicate' && forId && isPointId(forId) && ofId && isPointId(ofId)
+            ? { duplicate: { id: forId, of: ofId } }
+            : {}),
         });
         i = close;
         continue;
@@ -121,6 +125,7 @@ export function serialiseBlock(block: Block): string {
     case 'llm': {
       const attrs: Record<string, string> = { id: block.id };
       if (block.correctionFor) Object.assign(attrs, { kind: 'correction', for: block.correctionFor });
+      else if (block.duplicate) Object.assign(attrs, { kind: 'duplicate', for: block.duplicate.id, of: block.duplicate.of });
       Object.assign(attrs, { model: block.model, at: block.at });
       return `::llm{${renderAttrs(attrs)}}\n${block.body}\n${LLM_CLOSE}`;
     }
@@ -183,6 +188,13 @@ export function pointIdsIn(blocks: readonly Block[]): PointId[] {
 /** Point IDs that have an AI correction note in these blocks. */
 export function correctedIdsIn(blocks: readonly Block[]): PointId[] {
   return blocks.flatMap((b) => (b.kind === 'llm' && b.correctionFor ? [b.correctionFor] : []));
+}
+
+/** Duplicate point ID -> the earlier point it repeats, from `kind=duplicate` blocks. */
+export function duplicatesIn(blocks: readonly Block[]): Map<PointId, PointId> {
+  const out = new Map<PointId, PointId>();
+  for (const b of blocks) if (b.kind === 'llm' && b.duplicate) out.set(b.duplicate.id, b.duplicate.of);
+  return out;
 }
 
 /** Replaces only the frontmatter title; the body (every block) is kept byte for byte. */

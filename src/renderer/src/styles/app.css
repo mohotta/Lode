@@ -160,6 +160,7 @@ button {
 .app {
   display: grid;
   grid-template-columns: 248px minmax(340px, 400px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
 }
 .app.with-settings {
@@ -235,10 +236,14 @@ button {
     background 0.12s,
     color 0.12s;
 }
-.icon-btn:hover,
+.icon-btn:hover:not(:disabled),
 .icon-btn[aria-expanded='true'] {
   color: var(--text);
   background: var(--hover);
+}
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 /* ---------- Sidebar ---------- */
@@ -1427,4 +1432,313 @@ button.tag:hover {
   gap: 4px;
   background: var(--danger-tint);
   color: var(--danger);
+}
+
+/* ---------- Note navigation and actions ---------- */
+.pane-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.pane-nav .crumbs {
+  margin-left: 8px;
+}
+.crumb-link {
+  border: 0;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-3);
+  font-size: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crumb-link:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.note-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.spinner.small {
+  width: 11px;
+  height: 11px;
+  border-width: 1.5px;
+  flex: none;
+}
+
+/* ---------- Point actions and inline edit ---------- */
+.point-row {
+  position: relative;
+}
+.point-row .point-actions {
+  flex: none;
+  align-self: flex-start;
+}
+.point-row:hover .row-actions,
+.point-row:focus-within .row-actions {
+  opacity: 1;
+}
+.point-block-actions {
+  display: inline-flex;
+  margin-right: -6px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.point-block:hover .point-block-actions,
+.point-block:focus-within .point-block-actions,
+.point-block-actions:has([aria-expanded='true']) {
+  opacity: 1;
+}
+.point-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.point-editor-input {
+  width: 100%;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--focus);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.5;
+  outline: none;
+}
+.point-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.point-editor-actions .muted {
+  margin-right: auto;
+  font-size: 11.5px;
+}
+.btn.small-btn {
+  height: 24px;
+  padding: 0 8px;
+  margin-left: auto;
+  font-size: 12px;
+}
+
+/* ---------- Repeats (duplicates) ---------- */
+.point-block.repeat {
+  border-left-style: double;
+  border-left-width: 4px;
+  opacity: 0.85;
+}
+.badge.repeat-badge,
+.dup-tag {
+  gap: 4px;
+  color: var(--text-2);
+}
+.dup-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 9px 10px 9px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+  font-size: 12.5px;
+}
+.dup-notice.exact {
+  border-left: 3px solid var(--accent);
+}
+.dup-icon {
+  flex: none;
+  color: var(--accent-ink);
+}
+.dup-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.dup-text strong {
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+.dup-text span {
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dup-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.dup-actions .btn {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+/* ---------- Status bar (background jobs) ---------- */
+.status-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 34px;
+  padding: 0 10px 0 14px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-side);
+  font-size: 12px;
+  min-width: 0;
+}
+.status-summary {
+  flex: none;
+  color: var(--text-3);
+}
+.jobs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.job {
+  display: flex;
+  align-items: center;
+  flex: none;
+  max-width: 420px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.job.running {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.job.failed {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent);
+}
+.job-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 9px;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.job-main:hover .job-title {
+  color: var(--text);
+}
+.job-icon {
+  flex: none;
+}
+.job-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--text-3);
+}
+.job-title {
+  font-weight: 550;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.job-status {
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.job-x {
+  width: 20px;
+  height: 20px;
+  margin-right: 2px;
+}
+.toast {
+  bottom: 48px;
+}
+
+/* ---------- Trash ---------- */
+.trash-btn {
+  position: relative;
+  margin-left: auto;
+}
+.trash-btn.selected {
+  color: var(--text);
+  background: var(--selected);
+}
+.trash-btn + .icon-btn {
+  margin-left: 0;
+}
+.trash-count {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--text-3);
+  color: var(--bg-side);
+  font-size: 9.5px;
+  font-weight: 650;
+  line-height: 15px;
+  text-align: center;
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+.trash-list {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.trash-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.trash-icon {
+  flex: none;
+  color: var(--text-3);
+}
+.trash-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.trash-title {
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trash-sub {
+  font-size: 12px;
+  color: var(--text-3);
 }

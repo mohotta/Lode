@@ -167,3 +167,42 @@ export const CalendarIcon = (p: P): React.JSX.Element => (
     <path d="M2.5 7h11M5.5 2v3M10.5 2v3" />
   </Svg>
 );
+
+export const ArrowLeftIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M13 8H3.5M7.5 4L3.5 8l4 4" />
+  </Svg>
+);
+
+export const ArrowRightIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M3 8h9.5M8.5 4l4 4-4 4" />
+  </Svg>
+);
+
+export const RefreshIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M13 8a5 5 0 01-8.9 3.1M3 8a5 5 0 018.9-3.1" />
+    <path d="M12.5 2.5v2.8H9.7M3.5 13.5v-2.8h2.8" />
+  </Svg>
+);
+
+export const UndoIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M5.5 3.5L2.5 6.5l3 3" />
+    <path d="M2.5 6.5h6.5a4 4 0 010 8H6" />
+  </Svg>
+);
+
+export const CopyIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+    <path d="M10.5 5.5V4A1.5 1.5 0 009 2.5H4A1.5 1.5 0 002.5 4v5A1.5 1.5 0 004 10.5h1.5" />
+  </Svg>
+);
+
+export const MinimizeIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M3.5 12.5h9" />
+  </Svg>
+);

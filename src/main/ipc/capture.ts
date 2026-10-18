@@ -1,5 +1,7 @@
 import { BrowserWindow, dialog, shell } from 'electron';
 import { resolveNote } from '@core/repos/resolveNote';
+import type { AddResult } from '@shared/ipc';
+import type { PointId } from '@shared/types';
 import type { VaultRegistry } from '../VaultRegistry';
 import { handle } from './handle';
 
@@ -31,15 +33,31 @@ export function registerCaptureHandlers(registry: VaultRegistry): void {
   );
   handle('folder:delete', async ({ vaultId, folder }) => (await registry.get(vaultId)).service.deleteFolder(folder));
 
-  // The only backlog write path in M1 (invariant 1).
-  handle('backlog:add', async ({ vaultId, folder, text, date }) =>
-    (await registry.get(vaultId)).backlog.add(folder, text, date),
+  // The only backlog write paths (invariant 1): add, edit and soft delete, all user-initiated.
+  handle('backlog:add', async ({ vaultId, folder, text, date, force }): Promise<AddResult> => {
+    const v = await registry.get(vaultId);
+    // Local check only (no network, invariant 8). Exact repeats are refused even when forced.
+    const dup = await v.backlog.findDuplicate(folder, text);
+    if (dup && (dup.exact || !force)) {
+      return { duplicate: { id: dup.point.id, text: dup.point.text, date: dup.point.date, exact: dup.exact } };
+    }
+    return { added: await v.backlog.add(folder, text, date) };
+  });
+  handle('backlog:edit', async ({ vaultId, folder, id, text }) =>
+    (await registry.get(vaultId)).backlog.edit(folder, id as PointId, text),
+  );
+  handle('backlog:softDelete', async ({ vaultId, folder, id, deleted }) =>
+    (await registry.get(vaultId)).backlog.setDeleted(folder, id as PointId, deleted),
   );
 
   handle('backlog:listDays', async ({ vaultId, folder }) => {
     const v = await registry.get(vaultId);
-    const [filing, corrected] = await Promise.all([v.notes.filing(folder), v.notes.correctedIds(folder)]);
-    return v.backlog.listDays(folder, filing, corrected);
+    const [filing, corrected, duplicates] = await Promise.all([
+      v.notes.filing(folder),
+      v.notes.correctedIds(folder),
+      v.notes.duplicates(folder),
+    ]);
+    return v.backlog.listDays(folder, filing, corrected, duplicates);
   });
 
   handle('notes:list', async ({ vaultId, folder }) => (await registry.get(vaultId)).notes.listSubtopics(folder));
@@ -48,13 +66,23 @@ export function registerCaptureHandlers(registry: VaultRegistry): void {
     const v = await registry.get(vaultId);
     const note = await v.notes.read(folder, subtopic);
     if (!note) throw new Error('Note not found');
-    return resolveNote(folder, subtopic, note, await v.backlog.listPoints(folder));
+    return resolveNote(folder, subtopic, note, await v.backlog.listPoints(folder), await v.notes.canUndo(folder, subtopic, note));
   });
 
   // Title-only rename; the note's slug, path and blocks are unchanged.
   handle('notes:rename', async ({ vaultId, folder, subtopic, title }) =>
     (await registry.get(vaultId)).notes.rename(folder, subtopic, title),
   );
+
+  // Moves the note to the vault trash; its points become unfiled again.
+  handle('notes:delete', async ({ vaultId, folder, subtopic }) => (await registry.get(vaultId)).notes.trash(folder, subtopic));
+  handle('notes:undoRegenerate', async ({ vaultId, folder, subtopic }) =>
+    (await registry.get(vaultId)).notes.undoRegenerate(folder, subtopic),
+  );
+
+  handle('trash:list', async ({ vaultId }) => (await registry.get(vaultId)).trash.list());
+  handle('trash:restore', async ({ vaultId, id }) => (await registry.get(vaultId)).trash.restore(id));
+  handle('trash:purge', async ({ vaultId, id }) => (await registry.get(vaultId)).trash.purge(id));
 
   handle('link:open', async ({ url }) => {
     const u = new URL(url);

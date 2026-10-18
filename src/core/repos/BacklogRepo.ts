@@ -8,9 +8,12 @@ import {
   isCalendarDate,
   normalisePointText,
   parseBacklog,
+  replaceEntryText,
+  setTombstone,
   type BacklogFile,
 } from '../formats/backlog';
 import { newPointId, type RandomInt } from '../formats/ids';
+import { findDuplicate, type DuplicateMatch } from './duplicates';
 import type { ReadonlyBacklog } from './ReadonlyBacklog';
 import { LODE_DIR, Vault, localDate } from './Vault';
 
@@ -85,12 +88,19 @@ export class BacklogRepo {
     folder: string,
     filing: ReadonlyMap<PointId, readonly string[]>,
     corrected: ReadonlySet<PointId> = new Set(),
+    duplicates: ReadonlyMap<PointId, PointId> = new Map(),
   ): Promise<BacklogDay[]> {
     const days = new Map<string, BacklogDay>();
     for (const p of await this.listPoints(folder)) {
       let day = days.get(p.date);
       if (!day) days.set(p.date, (day = { date: p.date, points: [] }));
-      day.points.push({ ...p, filedUnder: [...(filing.get(p.id) ?? [])], corrected: corrected.has(p.id) });
+      const dup = duplicates.get(p.id);
+      day.points.push({
+        ...p,
+        filedUnder: [...(filing.get(p.id) ?? [])],
+        corrected: corrected.has(p.id),
+        ...(dup ? { duplicateOf: dup } : {}),
+      });
     }
     return [...days.values()];
   }
@@ -136,12 +146,53 @@ export class BacklogRepo {
     });
   }
 
+  /** A live point in `folder` that `input` repeats, if any (local check only, no network). */
+  async findDuplicate(folder: string, input: string): Promise<DuplicateMatch | null> {
+    return findDuplicate(normalisePointText(input), await this.listPoints(folder));
+  }
+
+  private async dayFileOf(folder: string, id: PointId): Promise<{ path: string; date: string }> {
+    for (const name of await this.dayFiles(folder)) {
+      const day = await this.readDay(folder, name);
+      if (day.entries.some((e) => e.id === id)) {
+        return { path: await this.vault.folderPath(folder, 'backlog', name), date: day.date };
+      }
+    }
+    throw new Error('Point not found');
+  }
+
+  /** User-initiated only (`backlog:edit`). Changes the point's text; its ID and date stay (FR-8). */
+  async edit(folder: string, id: PointId, input: string): Promise<Point> {
+    const text = normalisePointText(input);
+    const { path, date } = await this.dayFileOf(folder, id);
+    return this.vault.locks.run(path, async () => {
+      const existing = await readTextOrNull(path);
+      if (existing === null) throw new Error('Point not found');
+      await atomicWrite(path, replaceEntryText(existing, id, text));
+      const deleted = parseBacklog(existing, date).deleted.includes(id);
+      return { id, text, date, folder, deleted };
+    });
+  }
+
+  /** User-initiated only (`backlog:softDelete`). Adds or removes a tombstone; the text is kept (FR-9). */
+  async setDeleted(folder: string, id: PointId, deleted: boolean): Promise<void> {
+    const { path, date } = await this.dayFileOf(folder, id);
+    await this.vault.locks.run(path, async () => {
+      const existing = await readTextOrNull(path);
+      if (existing === null) throw new Error('Point not found');
+      await atomicWrite(path, setTombstone(existing, date, id, deleted));
+    });
+  }
+
   /** The read-only view handed to generation code. No reference to this repo escapes. */
   asReadonly(filing: FilingLookup): ReadonlyBacklog {
     const listPoints = (folder: string): Promise<Point[]> => this.listPoints(folder);
     const findAnywhere = (id: PointId): Promise<Point | undefined> => this.findAnywhere(id);
     const freeze = (p: Point): Point => Object.freeze({ ...p });
     return Object.freeze({
+      async listLive(folder: string): Promise<readonly Point[]> {
+        return Object.freeze((await listPoints(folder)).filter((p) => !p.deleted).reverse().map(freeze));
+      },
       async listUnfiled(folder: string): Promise<readonly Point[]> {
         const [points, filed] = await Promise.all([listPoints(folder), filing(folder)]);
         // Oldest first, so the LLM sees points in the order they were learned.

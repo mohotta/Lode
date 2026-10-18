@@ -42,8 +42,15 @@ export const ReviewSchema = z.object({
   verdict: z.enum(['accurate', 'partly', 'inaccurate']).catch('accurate'),
 });
 
+/** A point that repeats an earlier one (from this run or from `knownPoints`). IDs only. */
+export const DuplicateSchema = z.object({
+  pointId: z.string().max(32),
+  duplicateOf: z.string().max(32),
+});
+
 export const GenerationOutputSchema = z.object({
   review: z.array(ReviewSchema).max(100).default([]),
+  duplicates: z.array(DuplicateSchema).max(100).default([]),
   assignments: z.array(AssignmentSchema).max(100),
   corrections: z.array(CorrectionSchema).max(50).default([]),
 });
@@ -56,7 +63,7 @@ export type Correction = z.infer<typeof CorrectionSchema>;
 export const GENERATION_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['review', 'corrections', 'assignments'],
+  required: ['review', 'duplicates', 'corrections', 'assignments'],
   properties: {
     review: {
       type: 'array',
@@ -65,6 +72,15 @@ export const GENERATION_JSON_SCHEMA = {
         additionalProperties: false,
         required: ['pointId', 'verdict'],
         properties: { pointId: { type: 'string' }, verdict: { type: 'string', enum: ['accurate', 'partly', 'inaccurate'] } },
+      },
+    },
+    duplicates: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['pointId', 'duplicateOf'],
+        properties: { pointId: { type: 'string' }, duplicateOf: { type: 'string' } },
       },
     },
     corrections: {

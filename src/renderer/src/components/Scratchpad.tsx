@@ -1,32 +1,53 @@
 import { forwardRef, useRef, useState } from 'react';
 import { localDate, shortDate } from '../dates';
-import { CalendarIcon, CloseIcon, PlusIcon, ReturnIcon } from './Icons';
+import { CalendarIcon, CloseIcon, CopyIcon, PlusIcon, ReturnIcon } from './Icons';
+
+export interface DuplicateInfo {
+  id: string;
+  text: string;
+  date: string;
+  exact: boolean;
+}
 
 interface Props {
   folderTitle: string;
-  /** `date` is set only when the user picked a day other than today. */
-  onAdd(text: string, date?: string): Promise<void>;
+  /**
+   * `date` is set only when the user picked a day other than today. Resolves with the
+   * earlier point when the text looks like a repeat (nothing was added), else null.
+   */
+  onAdd(text: string, date?: string, force?: boolean): Promise<DuplicateInfo | null>;
+  onShowPoint(id: string): void;
+}
+
+function excerpt(text: string): string {
+  const one = text.replace(/\s+/g, ' ').trim();
+  return one.length > 90 ? `${one.slice(0, 90)}…` : one;
 }
 
 /**
  * Enter adds the point; Shift+Enter inserts a newline for multi-line points.
  * A picked date stays until changed or reset (handy for backfilling one day).
  */
-export const Scratchpad = forwardRef<HTMLTextAreaElement, Props>(function Scratchpad({ folderTitle, onAdd }, ref) {
+export const Scratchpad = forwardRef<HTMLTextAreaElement, Props>(function Scratchpad(
+  { folderTitle, onAdd, onShowPoint },
+  ref,
+) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [dup, setDup] = useState<DuplicateInfo | null>(null);
   const [date, setDate] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const today = localDate(new Date());
   // A picked date that has become "today" (or is invalid/future) behaves like no pick.
   const picked = date && date < today ? date : null;
 
-  const submit = async (): Promise<void> => {
+  const submit = async (force = false): Promise<void> => {
     if (!text.trim() || busy) return;
     setBusy(true);
     try {
-      await onAdd(text, picked ?? undefined);
-      setText('');
+      const repeat = await onAdd(text, picked ?? undefined, force);
+      setDup(repeat);
+      if (!repeat) setText('');
     } finally {
       setBusy(false);
     }
@@ -47,7 +68,10 @@ export const Scratchpad = forwardRef<HTMLTextAreaElement, Props>(function Scratc
           rows={Math.min(6, Math.max(1, text.split('\n').length))}
           value={text}
           maxLength={4000}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            setDup(null);
+          }}
           onKeyDown={(e) => {
             // Inside an unclosed ``` fence, Enter is a newline so code can be typed naturally.
             const inFence = ((text.match(/^\s*```/gm) ?? []).length % 2) === 1;
@@ -63,6 +87,31 @@ export const Scratchpad = forwardRef<HTMLTextAreaElement, Props>(function Scratc
           </kbd>
         </span>
       </div>
+
+      {dup && (
+        <div className={`dup-notice ${dup.exact ? 'exact' : ''}`} role="status">
+          <CopyIcon size={14} className="dup-icon" />
+          <div className="dup-text">
+            <strong>{dup.exact ? 'Already in your backlog' : 'Looks like an earlier point'}</strong>
+            <span>
+              {shortDate(dup.date)} · “{excerpt(dup.text)}”
+            </span>
+          </div>
+          <div className="dup-actions">
+            <button className="btn" onClick={() => onShowPoint(dup.id)}>
+              Show
+            </button>
+            {!dup.exact && (
+              <button className="btn primary" onClick={() => void submit(true)}>
+                Add anyway
+              </button>
+            )}
+            <button className="icon-btn" aria-label="Dismiss" onClick={() => setDup(null)}>
+              <CloseIcon size={12} />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="composer-tools">
         <div className={`date-chip ${picked ? 'set' : ''}`}>

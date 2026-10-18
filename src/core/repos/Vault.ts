@@ -43,3 +43,15 @@ export function localDate(d: Date): string {
   const pad = (n: number): string => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+/** An ISO timestamp made safe for a file name: `2026-10-17T10:42:00.000Z` -> `2026-10-17T10-42-00-000Z`. */
+export function fileStamp(iso: string): string {
+  return iso.replace(/[:.]/g, '-');
+}
+
+export const STAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/;
+
+/** Inverse of `fileStamp`. */
+export function stampToIso(stamp: string): string {
+  return stamp.replace(/^(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/, '$1:$2:$3.$4Z');
+}

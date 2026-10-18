@@ -1,10 +1,11 @@
-import type { KeyIdName, PreviewView, ProgressView, Result, RunReportView, SettingsView } from '@shared/ipc';
+import type { AddResult, JobView, KeyIdName, PreviewView, Result, SettingsView } from '@shared/ipc';
 import type {
   BacklogDay,
   FolderInfo,
   Point,
   ResolvedNote,
   SubtopicInfo,
+  TrashItem,
   VaultInfo,
 } from '@shared/types';
 
@@ -24,14 +25,29 @@ export interface LodeApi {
     delete(vaultId: string, folder: string): R<void>;
   };
   backlog: {
-    /** `date` is an optional local day (YYYY-MM-DD), today or earlier; omitted means today. */
-    add(vaultId: string, folder: string, text: string, date?: string): R<Point>;
+    /**
+     * `date` is an optional local day (YYYY-MM-DD), today or earlier; omitted means today.
+     * A likely repeat of an earlier point is reported instead of added unless `force` is set.
+     */
+    add(vaultId: string, folder: string, text: string, opts?: { date?: string; force?: boolean }): R<AddResult>;
+    edit(vaultId: string, folder: string, id: string, text: string): R<Point>;
+    /** Soft delete (tombstone) or restore. The text is kept either way. */
+    softDelete(vaultId: string, folder: string, id: string, deleted: boolean): R<void>;
     listDays(vaultId: string, folder: string): R<BacklogDay[]>;
   };
   notes: {
     list(vaultId: string, folder: string): R<SubtopicInfo[]>;
     read(vaultId: string, folder: string, subtopic: string): R<ResolvedNote>;
     rename(vaultId: string, folder: string, subtopic: string, title: string): R<SubtopicInfo>;
+    /** Moves the note to the vault trash. */
+    delete(vaultId: string, folder: string, subtopic: string): R<void>;
+    undoRegenerate(vaultId: string, folder: string, subtopic: string): R<void>;
+  };
+  trash: {
+    list(vaultId: string): R<TrashItem[]>;
+    restore(vaultId: string, id: string): R<TrashItem>;
+    /** Permanently deletes one item, or everything when `id` is omitted. */
+    purge(vaultId: string, id?: string): R<void>;
   };
   link: {
     open(url: string): R<void>;
@@ -52,10 +68,15 @@ export interface LodeApi {
     clear(id: KeyIdName): R<boolean>;
   };
   generate: {
-    preview(vaultId: string, folder: string): R<PreviewView>;
-    run(vaultId: string, folder: string): R<RunReportView>;
-    cancel(vaultId: string, folder: string): R<void>;
-    /** Returns an unsubscribe function. */
-    onProgress(cb: (p: { vaultId: string; folder: string; event: ProgressView }) => void): () => void;
+    /** With `subtopic`, previews a Regenerate of that note. */
+    preview(vaultId: string, folder: string, subtopic?: string): R<PreviewView>;
+    /** Queues a background Generate (or a Regenerate with `subtopic`) and returns at once. */
+    enqueue(vaultId: string, folder: string, subtopic?: string): R<JobView>;
+    jobs(): R<JobView[]>;
+    cancel(jobId: string): R<void>;
+    /** Removes a finished job from the status bar. */
+    dismiss(jobId: string): R<void>;
+    /** Called with the full job list on every change. Returns an unsubscribe function. */
+    onJobs(cb: (jobs: JobView[]) => void): () => void;
   };
 }
