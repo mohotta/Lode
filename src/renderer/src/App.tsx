@@ -24,6 +24,8 @@ import { TrashView } from './components/TrashView';
 import { CloseIcon, SparkIcon, VaultIcon } from './components/Icons';
 import { DIGEST_PREFIX, NotePane } from './components/NotePane';
 import { isActive } from './jobs';
+import { Resizer } from './components/Resizer';
+import { BACKLOG, NOTE_MIN, SIDEBAR, usePaneWidths } from './layout';
 import { useTheme } from './theme';
 
 type Page = 'main' | 'settings' | 'trash' | 'review' | 'search';
@@ -85,6 +87,7 @@ export function App(): React.JSX.Element {
   const pendingJump = useRef<string | null>(null);
   const scratchRef = useRef<HTMLTextAreaElement>(null);
   const [theme, setTheme] = useTheme();
+  const [widths, setWidths] = usePaneWidths();
 
   const place = history.items[history.i];
   const folder = place?.folder ?? null;
@@ -389,7 +392,16 @@ export function App(): React.JSX.Element {
   };
 
   return (
-    <div className={`app ${page !== 'main' ? 'with-settings' : ''}`}>
+    <div
+      className={`app ${page !== 'main' ? 'with-settings' : ''}`}
+      style={
+        {
+          '--side-w': `${widths.sidebar}px`,
+          '--list-w': `${widths.backlog}px`,
+          '--note-min': `${NOTE_MIN}px`,
+        } as React.CSSProperties
+      }
+    >
       <Sidebar
         vaults={vaults}
         activeVaultId={vaultId}
@@ -403,6 +415,16 @@ export function App(): React.JSX.Element {
         reviewOpen={page === 'review'}
         reviewCount={review.length}
         searchOpen={page === 'search'}
+        resizer={
+          <Resizer
+            label="Resize sidebar"
+            width={widths.sidebar}
+            min={SIDEBAR.min}
+            max={SIDEBAR.max}
+            initial={SIDEBAR.initial}
+            onResize={(w) => setWidths({ sidebar: w })}
+          />
+        }
         onOpenReview={() => {
           setPage('review');
           if (vaultId) void loadReview(vaultId);
@@ -519,6 +541,14 @@ export function App(): React.JSX.Element {
       ) : (
         <>
           <main className="backlog-pane" aria-label="Scratchpad and backlog">
+            <Resizer
+              label="Resize backlog"
+              width={widths.backlog}
+              min={BACKLOG.min}
+              max={BACKLOG.max}
+              initial={BACKLOG.initial}
+              onResize={(w) => setWidths({ backlog: w })}
+            />
             {vaultId && folder && folderInfo ? (
               <>
                 <header className="pane-bar">

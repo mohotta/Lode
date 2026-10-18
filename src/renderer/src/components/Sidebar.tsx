@@ -49,6 +49,8 @@ interface Props {
   onOpenTrash(): void;
   onOpenReview(): void;
   onOpenSearch(): void;
+  /** Drag handle on the right edge (see Resizer). */
+  resizer?: React.ReactNode;
 }
 
 const NEXT_THEME: Record<ThemePref, ThemePref> = { system: 'dark', dark: 'light', light: 'system' };
@@ -78,6 +80,7 @@ export function Sidebar(p: Props): React.JSX.Element {
 
   return (
     <nav className="sidebar" aria-label="Vaults and folders">
+      {p.resizer}
       <div className="sidebar-top">
         <Menu
           label="Switch vault"
