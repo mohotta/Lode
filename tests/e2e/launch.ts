@@ -1,0 +1,32 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import { vaultIdFor } from '../../src/main/VaultRegistry';
+import { tempDir } from '../helpers';
+
+export interface Launched {
+  app: ElectronApplication;
+  page: Page;
+  vaultRoot: string;
+  userData: string;
+}
+
+/** Launches the built app against a fresh temp profile with one pre-registered empty vault. */
+export async function launch(extraEnv: Record<string, string> = {}, settings: object = {}): Promise<Launched> {
+  const userData = await tempDir('lode-e2e-profile-');
+  const vaultRoot = await tempDir('lode-e2e-vault-');
+  await mkdir(userData, { recursive: true });
+  const id = vaultIdFor(vaultRoot);
+  await writeFile(
+    join(userData, 'settings.json'),
+    JSON.stringify({ vaults: [{ id, path: vaultRoot, name: 'E2E Vault' }], lastVaultId: id, ...settings }),
+  );
+  const app = await electron.launch({
+    // Basic password store: never touch (or prompt for) the developer's real keyring.
+    args: [resolve('out/main/index.js'), '--password-store=basic'],
+    env: { ...process.env, LODE_USER_DATA: userData, ELECTRON_RENDERER_URL: '', ...extraEnv } as Record<string, string>,
+  });
+  const page = await app.firstWindow();
+  await page.waitForLoadState('domcontentloaded');
+  return { app, page, vaultRoot, userData };
+}
