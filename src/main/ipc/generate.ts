@@ -4,6 +4,7 @@ import { atomicWrite } from '@core/fs/atomicWrite';
 import { readTextOrNull } from '@core/fs/readText';
 import { GenerationCancelled, GenerationService, type GenerationReport } from '@core/generation/GenerationService';
 import { JobQueue } from '@core/generation/JobQueue';
+import { periodRange } from '@core/formats/period';
 import { OpenAiCompatibleAdapter } from '@core/llm/openaiCompatible';
 import { TavilySearch } from '@core/llm/tavily';
 import { LODE_DIR } from '@core/repos/Vault';
@@ -23,7 +24,7 @@ async function logRun(
   folder: string,
   model: string,
   report: GenerationReport,
-  kind: 'generate' | 'regenerate',
+  kind: 'generate' | 'regenerate' | 'digest',
 ): Promise<void> {
   // Local usage log (PRD cost transparency). Counts only: no point text, no keys.
   const path = await v.vault.path(LODE_DIR, 'runs.json');
@@ -69,6 +70,7 @@ export function registerGenerateHandlers(registry: VaultRegistry, settings: Sett
       // Invariant 1: generation receives the read-only backlog view and the notes repo only.
       backlog: v.backlog.asReadonly((folder) => v.notes.filing(folder)),
       notes: v.notes,
+      digests: v.digests,
       adapter,
       settings: { ...s.generation, useSearch: s.generation.useSearch && hasTavily },
     });
@@ -92,17 +94,28 @@ export function registerGenerateHandlers(registry: VaultRegistry, settings: Sett
       if (blocker) throw new Error(blocker);
       const title = await folderTitle(v, spec.folder);
       try {
-        const sub = spec.subtopic;
-        const preview = sub ? await gen.previewRegenerate(spec.folder, title, sub) : await gen.preview(spec.folder, title);
+        const { subtopic: sub, digest } = spec;
+        const preview = digest
+          ? await gen.previewDigest(spec.folder, title, digest)
+          : sub
+            ? await gen.previewRegenerate(spec.folder, title, sub)
+            : await gen.preview(spec.folder, title);
         if (preview.overCap) throw new Error(OVER_CAP);
-        const report = sub
-          ? await gen.regenerate(spec.folder, title, sub, signal, onProgress)
-          : await gen.run(spec.folder, title, signal, onProgress);
+        const report = digest
+          ? await gen.digest(spec.folder, title, digest, signal, onProgress)
+          : sub
+            ? await gen.regenerate(spec.folder, title, sub, signal, onProgress)
+            : await gen.run(spec.folder, title, signal, onProgress);
         await logRun(v, spec.folder, model, report, spec.kind).catch(() => undefined);
         return report;
       } catch (err) {
         if (err instanceof GenerationCancelled) throw err;
-        const prefix = spec.kind === 'regenerate' ? 'Regenerate failed, the note is unchanged.' : 'Generation failed, nothing was written.';
+        const prefix =
+          spec.kind === 'regenerate'
+            ? 'Regenerate failed, the note is unchanged.'
+            : spec.kind === 'digest'
+              ? 'Digest failed, nothing was written.'
+              : 'Generation failed, nothing was written.';
         throw new Error(`${prefix} ${err instanceof Error ? err.message : ''}`.trim(), { cause: err });
       }
     },
@@ -112,15 +125,19 @@ export function registerGenerateHandlers(registry: VaultRegistry, settings: Sett
     (err) => err instanceof GenerationCancelled,
   );
 
-  handle('generate:preview', async ({ vaultId, folder, subtopic }): Promise<PreviewView> => {
+  handle('generate:preview', async ({ vaultId, folder, subtopic, digest }): Promise<PreviewView> => {
     const v = await registry.get(vaultId);
     const s = await settings.get();
     const { gen, blocker, model, baseUrl } = await build(v);
     const title = await folderTitle(v, folder);
-    const p = subtopic ? await gen.previewRegenerate(folder, title, subtopic) : await gen.preview(folder, title);
+    const p = digest
+      ? await gen.previewDigest(folder, title, digest)
+      : subtopic
+        ? await gen.previewRegenerate(folder, title, subtopic)
+        : await gen.preview(folder, title);
     return {
       ...p,
-      kind: subtopic ? 'regenerate' : 'generate',
+      kind: digest ? 'digest' : subtopic ? 'regenerate' : 'generate',
       searchUnavailable: s.generation.useSearch && !(await keys.has('tavily')),
       maxInputTokens: s.generation.maxInputTokens,
       provider: 'OpenAI-compatible',
@@ -129,7 +146,9 @@ export function registerGenerateHandlers(registry: VaultRegistry, settings: Sett
       blocker:
         blocker ??
         (p.points === 0
-          ? subtopic
+          ? digest
+            ? 'No points in this period.'
+            : subtopic
             ? 'This note has no points left to regenerate from.'
             : 'No unfiled points in this folder.'
           : p.overCap
@@ -138,11 +157,16 @@ export function registerGenerateHandlers(registry: VaultRegistry, settings: Sett
     };
   });
 
-  handle('generate:enqueue', async ({ vaultId, folder, subtopic }) => {
+  handle('generate:enqueue', async ({ vaultId, folder, subtopic, digest }) => {
     const v = await registry.get(vaultId);
     const { blocker } = await build(v);
     if (blocker) throw new Error(blocker);
     const title = await folderTitle(v, folder);
+    if (digest) {
+      const range = periodRange(digest);
+      if (!range) throw new Error('Invalid digest period');
+      return queue.enqueue({ vaultId, folder, folderTitle: title, kind: 'digest', digest, digestTitle: range.title });
+    }
     const note = subtopic ? await v.notes.read(folder, subtopic) : null;
     if (subtopic && !note) throw new Error('Note not found');
     return queue.enqueue({

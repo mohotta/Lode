@@ -6,7 +6,16 @@ import { MinimizeIcon } from './Icons';
 
 /** What the dialog shows: a preview to confirm, or an existing background job. */
 export type DialogTarget =
-  | { kind: 'new'; folder: string; folderTitle: string; subtopic?: string; subtopicTitle?: string }
+  | {
+      kind: 'new';
+      folder: string;
+      folderTitle: string;
+      subtopic?: string;
+      subtopicTitle?: string;
+      /** A digest period ID instead of a Generate or Regenerate. */
+      digest?: string;
+      digestTitle?: string;
+    }
   | { kind: 'job'; jobId: string };
 
 interface Props {
@@ -35,18 +44,25 @@ export function GenerateDialog(p: Props): React.JSX.Element {
   const { vaultId, target } = p;
   const newFolder = target.kind === 'new' ? target.folder : null;
   const newSubtopic = target.kind === 'new' ? target.subtopic : undefined;
+  const newDigest = target.kind === 'new' ? target.digest : undefined;
   const job = target.kind === 'job' ? p.jobs.find((j) => j.id === target.jobId) : undefined;
   const isRegen = target.kind === 'new' ? !!target.subtopic : job?.kind === 'regenerate';
+  const isDigest = target.kind === 'new' ? !!target.digest : job?.kind === 'digest';
   const heading =
     target.kind === 'new'
-      ? target.subtopic
-        ? `Regenerate · ${target.subtopicTitle ?? target.subtopic}`
-        : `Generate notes · ${target.folderTitle}`
+      ? target.digest
+        ? `Digest · ${target.digestTitle ?? target.digest}`
+        : target.subtopic
+          ? `Regenerate · ${target.subtopicTitle ?? target.subtopic}`
+          : `Generate notes · ${target.folderTitle}`
       : job
-        ? job.kind === 'regenerate'
-          ? `Regenerate · ${job.subtopicTitle ?? job.subtopic}`
-          : `Generate notes · ${job.folderTitle}`
+        ? job.kind === 'digest'
+          ? `Digest · ${job.digestTitle ?? job.digest}`
+          : job.kind === 'regenerate'
+            ? `Regenerate · ${job.subtopicTitle ?? job.subtopic}`
+            : `Generate notes · ${job.folderTitle}`
         : 'Generate';
+  const jobTarget = newDigest ? { digest: newDigest } : newSubtopic ? { subtopic: newSubtopic } : {};
 
   useEffect(() => {
     ref.current?.showModal();
@@ -55,14 +71,14 @@ export function GenerateDialog(p: Props): React.JSX.Element {
   useEffect(() => {
     if (newFolder === null) return;
     let cancelled = false;
-    unwrap(lode.generate.preview(vaultId, newFolder, newSubtopic)).then(
+    unwrap(lode.generate.preview(vaultId, newFolder, newDigest ? { digest: newDigest } : newSubtopic ? { subtopic: newSubtopic } : {})).then(
       (preview) => !cancelled && setState({ s: 'preview', preview, busy: false }),
       (e: unknown) => !cancelled && setState({ s: 'error', message: e instanceof Error ? e.message : String(e) }),
     );
     return () => {
       cancelled = true;
     };
-  }, [vaultId, newFolder, newSubtopic]);
+  }, [vaultId, newFolder, newSubtopic, newDigest]);
 
   const close = (): void => {
     ref.current?.close();
@@ -79,7 +95,7 @@ export function GenerateDialog(p: Props): React.JSX.Element {
     if (newFolder === null) return;
     setState({ s: 'preview', preview, busy: true });
     try {
-      await unwrap(lode.generate.enqueue(vaultId, newFolder, newSubtopic));
+      await unwrap(lode.generate.enqueue(vaultId, newFolder, jobTarget));
       close();
     } catch (e) {
       setState({ s: 'error', message: e instanceof Error ? e.message : String(e), preview });
@@ -107,7 +123,7 @@ export function GenerateDialog(p: Props): React.JSX.Element {
           <dl className="preview-grid">
             <dt>Points</dt>
             <dd>
-              {fmt(state.preview.points)} {isRegen ? 'in this note' : 'unfiled'}
+              {fmt(state.preview.points)} {isDigest ? 'in this period' : isRegen ? 'in this note' : 'unfiled'}
             </dd>
             <dt>Provider</dt>
             <dd>
@@ -122,14 +138,16 @@ export function GenerateDialog(p: Props): React.JSX.Element {
             </dd>
             <dt>Web search</dt>
             <dd>
-              {state.preview.useSearch ? 'On (Tavily)' : 'Off'}
-              {state.preview.searchUnavailable && (
+              {isDigest ? 'Off (digests recap your own points)' : state.preview.useSearch ? 'On (Tavily)' : 'Off'}
+              {!isDigest && state.preview.searchUnavailable && (
                 <span className="muted"> — no Tavily key saved, so AI additions cannot be sourced</span>
               )}
             </dd>
           </dl>
           <p className="muted small">
-            {isRegen
+            {isDigest
+              ? 'Sends the points from this period (no web search) and writes a recap that shows your points highlighted. An earlier digest for the same period is replaced and kept in history.'
+              : isRegen
               ? "Replaces this note's AI sections; the current version is kept so you can undo. Your points are sent again and never modified."
               : 'Sends your unfiled points, short excerpts of earlier points (to spot repeats) and your subtopic names. Your backlog is never modified.'}{' '}
             It runs in the background; you can keep working.
@@ -154,7 +172,11 @@ export function GenerateDialog(p: Props): React.JSX.Element {
               onClick={() => void start(state.preview)}
               autoFocus
             >
-              {isRegen ? `Regenerate from ${fmt(state.preview.points)} point(s)` : `Send ${fmt(state.preview.points)} point(s)`}
+              {isDigest
+                ? `Write digest from ${fmt(state.preview.points)} point(s)`
+                : isRegen
+                  ? `Regenerate from ${fmt(state.preview.points)} point(s)`
+                  : `Send ${fmt(state.preview.points)} point(s)`}
             </button>
           </div>
         </>
@@ -212,7 +234,9 @@ export function GenerateDialog(p: Props): React.JSX.Element {
       {job?.status === 'done' && job.report && (
         <>
           <p role="status">
-            {job.kind === 'regenerate'
+            {job.kind === 'digest'
+              ? `Wrote the digest from ${job.report.filed.length} point(s).`
+              : job.kind === 'regenerate'
               ? `Rewrote the AI sections for ${job.report.filed.length} point(s). The previous version can be restored with Undo regenerate.`
               : `Filed ${job.report.filed.length} point(s)${job.report.unfiled.length > 0 ? `, ${job.report.unfiled.length} left unfiled` : ''}.`}{' '}
             Used {fmt(job.report.usage.inputTokens)} in / {fmt(job.report.usage.outputTokens)} out tokens,{' '}
@@ -229,7 +253,7 @@ export function GenerateDialog(p: Props): React.JSX.Element {
                   <button
                     className="chip filed"
                     onClick={() => {
-                      p.onOpenSubtopic(job.folder, c.slug);
+                      p.onOpenSubtopic(job.folder, job.kind === 'digest' ? `digest:${c.slug}` : c.slug);
                       closeFinished();
                     }}
                   >

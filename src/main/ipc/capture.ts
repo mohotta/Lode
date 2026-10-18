@@ -84,6 +84,35 @@ export function registerCaptureHandlers(registry: VaultRegistry): void {
   handle('trash:restore', async ({ vaultId, id }) => (await registry.get(vaultId)).trash.restore(id));
   handle('trash:purge', async ({ vaultId, id }) => (await registry.get(vaultId)).trash.purge(id));
 
+  handle('review:list', async ({ vaultId }) => {
+    const v = await registry.get(vaultId);
+    return v.review.listDue({
+      folders: await v.service.listFolders(),
+      points: (folder) => v.backlog.listPoints(folder),
+      filing: (folder) => v.notes.filing(folder),
+      subtopics: (folder) => v.notes.listSubtopics(folder),
+    });
+  });
+  handle('review:mark', async ({ vaultId, items }) =>
+    (await registry.get(vaultId)).review.mark(items.map((i) => ({ id: i.id as PointId, stage: i.stage }))),
+  );
+
+  handle('digest:periods', async ({ vaultId, folder }) => {
+    const v = await registry.get(vaultId);
+    return v.digests.periods(folder, await v.backlog.listPoints(folder));
+  });
+  handle('digest:list', async ({ vaultId, folder }) => (await registry.get(vaultId)).digests.list(folder));
+  handle('digest:read', async ({ vaultId, folder, digest }) => {
+    const v = await registry.get(vaultId);
+    const note = await v.digests.read(folder, digest);
+    if (!note) throw new Error('Digest not found');
+    return resolveNote(folder, digest, note, await v.backlog.listPoints(folder));
+  });
+  handle('digest:delete', async ({ vaultId, folder, digest }) => (await registry.get(vaultId)).digests.delete(folder, digest));
+
+  // Local only: the index is built from the vault's own files (invariant 8).
+  handle('search:query', async ({ vaultId, q, limit }) => (await registry.get(vaultId)).index.query(q, limit));
+
   handle('link:open', async ({ url }) => {
     const u = new URL(url);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('Only http and https links can be opened');

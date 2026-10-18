@@ -1,20 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { JobView } from '@shared/ipc';
-import type { BacklogDay, FolderInfo, SubtopicInfo, TrashItem, VaultInfo } from '@shared/types';
+import type {
+  BacklogDay,
+  DigestInfo,
+  DigestPeriod,
+  FolderInfo,
+  ReviewItem,
+  SubtopicInfo,
+  TrashItem,
+  VaultInfo,
+} from '@shared/types';
 import { lode, unwrap } from './api';
 import { BacklogView } from './components/BacklogView';
+import { DigestPicker } from './components/DigestPicker';
 import { GenerateDialog, type DialogTarget } from './components/GenerateDialog';
 import { SettingsView } from './components/SettingsView';
 import { Scratchpad, type DuplicateInfo } from './components/Scratchpad';
 import { Sidebar } from './components/Sidebar';
+import { ReviewView } from './components/ReviewView';
+import { SearchView } from './components/SearchView';
 import { StatusBar } from './components/StatusBar';
 import { TrashView } from './components/TrashView';
 import { CloseIcon, SparkIcon, VaultIcon } from './components/Icons';
-import { NotePane } from './components/NotePane';
+import { DIGEST_PREFIX, NotePane } from './components/NotePane';
 import { isActive } from './jobs';
 import { useTheme } from './theme';
 
-type Page = 'main' | 'settings' | 'trash';
+type Page = 'main' | 'settings' | 'trash' | 'review' | 'search';
 
 /** One place the user has been: a folder, and optionally a note in it. Back/forward walk these. */
 interface Place {
@@ -28,6 +40,9 @@ interface History {
 }
 
 const EMPTY_HISTORY: History = { items: [], i: -1 };
+const NO_DAYS: BacklogDay[] = [];
+const NO_SUBTOPICS: SubtopicInfo[] = [];
+const NO_DIGESTS: DigestInfo[] = [];
 const samePlace = (a: Place | undefined, b: Place | undefined): boolean =>
   !!a && !!b && a.folder === b.folder && a.subtopic === b.subtopic;
 
@@ -50,11 +65,13 @@ export function App(): React.JSX.Element {
   const [vaultId, setVaultId] = useState<string | null>(null);
   const [folders, setFolders] = useState<FolderInfo[]>([]);
   const [history, setHistory] = useState<History>(EMPTY_HISTORY);
-  const [data, setData] = useState<{ key: string; days: BacklogDay[]; subtopics: SubtopicInfo[] }>({
+  const [data, setData] = useState<{ key: string; days: BacklogDay[]; subtopics: SubtopicInfo[]; digests: DigestInfo[] }>({
     key: '',
     days: [],
     subtopics: [],
+    digests: [],
   });
+  const [pickingDigest, setPickingDigest] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [noteVersion, setNoteVersion] = useState(0);
@@ -62,6 +79,10 @@ export function App(): React.JSX.Element {
   const [page, setPage] = useState<Page>('main');
   const [jobs, setJobs] = useState<JobView[]>([]);
   const [trash, setTrash] = useState<TrashItem[]>([]);
+  const [review, setReview] = useState<ReviewItem[]>([]);
+  const [query, setQuery] = useState('');
+  /** A point to scroll to once its folder has loaded (set by handlers, consumed after load). */
+  const pendingJump = useRef<string | null>(null);
   const scratchRef = useRef<HTMLTextAreaElement>(null);
   const [theme, setTheme] = useTheme();
 
@@ -69,8 +90,9 @@ export function App(): React.JSX.Element {
   const folder = place?.folder ?? null;
   const subtopic = place?.subtopic ?? null;
   const dataKey = vaultId && folder ? `${vaultId}/${folder}` : '';
-  const days = data.key === dataKey ? data.days : [];
-  const subtopics = data.key === dataKey ? data.subtopics : [];
+  const days = data.key === dataKey ? data.days : NO_DAYS;
+  const subtopics = data.key === dataKey ? data.subtopics : NO_SUBTOPICS;
+  const digests = data.key === dataKey ? data.digests : NO_DIGESTS;
 
   const guard = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
     try {
@@ -83,8 +105,12 @@ export function App(): React.JSX.Element {
   }, []);
 
   const load = useCallback(async (vid: string, slug: string): Promise<void> => {
-    const [d, s] = await Promise.all([unwrap(lode.backlog.listDays(vid, slug)), unwrap(lode.notes.list(vid, slug))]);
-    setData({ key: `${vid}/${slug}`, days: d, subtopics: s });
+    const [d, s, g] = await Promise.all([
+      unwrap(lode.backlog.listDays(vid, slug)),
+      unwrap(lode.notes.list(vid, slug)),
+      unwrap(lode.digest.list(vid, slug)),
+    ]);
+    setData({ key: `${vid}/${slug}`, days: d, subtopics: s, digests: g });
     setNoteVersion((v) => v + 1);
   }, []);
 
@@ -92,10 +118,14 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     if (!vaultId || !folder) return;
     let cancelled = false;
-    Promise.all([unwrap(lode.backlog.listDays(vaultId, folder)), unwrap(lode.notes.list(vaultId, folder))]).then(
-      ([d, s]) => {
+    Promise.all([
+      unwrap(lode.backlog.listDays(vaultId, folder)),
+      unwrap(lode.notes.list(vaultId, folder)),
+      unwrap(lode.digest.list(vaultId, folder)),
+    ]).then(
+      ([d, s, g]) => {
         if (cancelled) return;
-        setData({ key: `${vaultId}/${folder}`, days: d, subtopics: s });
+        setData({ key: `${vaultId}/${folder}`, days: d, subtopics: s, digests: g });
         setNoteVersion((v) => v + 1);
       },
       (e: unknown) => !cancelled && setError(message(e)),
@@ -109,11 +139,27 @@ export function App(): React.JSX.Element {
     if (vaultId && folder) await guard(() => load(vaultId, folder));
   }, [vaultId, folder, guard, load]);
 
+  // Scroll to a point requested from another page once its folder's backlog is on screen.
+  useEffect(() => {
+    const id = pendingJump.current;
+    if (!id || !days.some((d) => d.points.some((pt) => pt.id === id))) return;
+    pendingJump.current = null;
+    requestAnimationFrame(() => document.getElementById(`point-${id}`)?.scrollIntoView({ block: 'center' }));
+  }, [days]);
+
   const loadTrash = useCallback(async (vid: string) => {
     try {
       setTrash(await unwrap(lode.trash.list(vid)));
     } catch {
       setTrash([]);
+    }
+  }, []);
+
+  const loadReview = useCallback(async (vid: string) => {
+    try {
+      setReview(await unwrap(lode.review.list(vid)));
+    } catch {
+      setReview([]);
     }
   }, []);
 
@@ -124,10 +170,10 @@ export function App(): React.JSX.Element {
         setVaultId(id);
         setFolders(fs);
         setHistory(EMPTY_HISTORY);
-        await loadTrash(id);
+        await Promise.all([loadTrash(id), loadReview(id)]);
       });
     },
-    [guard, loadTrash],
+    [guard, loadTrash, loadReview],
   );
 
   useEffect(() => {
@@ -167,6 +213,11 @@ export function App(): React.JSX.Element {
   // Alt+Left/Right and the mouse's back/forward buttons, like a browser.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPage('search');
+        return;
+      }
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       if (e.key === 'ArrowLeft') step(-1);
       else if (e.key === 'ArrowRight') step(1);
@@ -279,8 +330,32 @@ export function App(): React.JSX.Element {
   const vaultJobs = jobs.filter((j) => j.vaultId === vaultId);
   const genJob = vaultJobs.find((j) => isActive(j) && j.kind === 'generate' && j.folder === folder);
   const regenJob = vaultJobs.find(
-    (j) => isActive(j) && j.kind === 'regenerate' && j.folder === folder && j.subtopic === subtopic,
+    (j) =>
+      isActive(j) &&
+      j.folder === folder &&
+      (subtopic?.startsWith(DIGEST_PREFIX)
+        ? j.kind === 'digest' && j.digest === subtopic.slice(DIGEST_PREFIX.length)
+        : j.kind === 'regenerate' && j.subtopic === subtopic),
   );
+
+  const openDigestDialog = (id: string, title: string): void => {
+    if (!folder || !folderInfo) return;
+    const running = vaultJobs.find((j) => isActive(j) && j.kind === 'digest' && j.folder === folder && j.digest === id);
+    setDialog(
+      running ? { kind: 'job', jobId: running.id } : { kind: 'new', folder, folderTitle: folderInfo.title, digest: id, digestTitle: title },
+    );
+  };
+
+  const deleteDigest = async (id: string, title: string): Promise<void> => {
+    if (!vaultId || !folder) return;
+    if (!confirm(`Delete the digest "${title}"? Your points are not affected; you can write it again.`)) return;
+    await guard(async () => {
+      await unwrap(lode.digest.delete(vaultId, folder, id));
+      const key = `${DIGEST_PREFIX}${id}`;
+      setHistory((h) => rewrite(h, (pl) => (pl.folder === folder && pl.subtopic === key ? { folder, subtopic: null } : pl)));
+      await refreshFolder();
+    });
+  };
 
   const jumpToPoint = (id: string): void => {
     setPage('main');
@@ -289,6 +364,18 @@ export function App(): React.JSX.Element {
       setFlashId(id);
       document.getElementById(`point-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     });
+  };
+
+  /** Opens a point's folder (from Review or Search) and highlights the point in the backlog. */
+  const showPoint = (f: string, id: string): void => {
+    if (f === folder) {
+      navigate({ folder: f, subtopic });
+      jumpToPoint(id);
+      return;
+    }
+    pendingJump.current = id;
+    setFlashId(id);
+    navigate({ folder: f, subtopic: null });
   };
 
   const regenerate = (slug: string, title: string): void => {
@@ -313,6 +400,14 @@ export function App(): React.JSX.Element {
         settingsOpen={page === 'settings'}
         trashOpen={page === 'trash'}
         trashCount={trash.length}
+        reviewOpen={page === 'review'}
+        reviewCount={review.length}
+        searchOpen={page === 'search'}
+        onOpenReview={() => {
+          setPage('review');
+          if (vaultId) void loadReview(vaultId);
+        }}
+        onOpenSearch={() => setPage('search')}
         theme={theme}
         onTheme={setTheme}
         onSelectVault={(id) => {
@@ -374,6 +469,30 @@ export function App(): React.JSX.Element {
       {page === 'settings' ? (
         <main className="settings-page" aria-label="Settings">
           <SettingsView onClose={() => setPage('main')} />
+        </main>
+      ) : page === 'review' && vaultId ? (
+        <main className="settings-page" aria-label="Review">
+          <ReviewView
+            items={review}
+            onClose={() => setPage('main')}
+            onShowPoint={showPoint}
+            onOpenNote={(f, s) => navigate({ folder: f, subtopic: s })}
+            onMark={async (items) => {
+              await guard(() => unwrap(lode.review.mark(vaultId, items.map((i) => ({ id: i.id, stage: i.stage })))));
+              await loadReview(vaultId);
+            }}
+          />
+        </main>
+      ) : page === 'search' && vaultId ? (
+        <main className="settings-page" aria-label="Search">
+          <SearchView
+            vaultId={vaultId}
+            query={query}
+            onQuery={setQuery}
+            onClose={() => setPage('main')}
+            onOpenPoint={showPoint}
+            onOpenNote={(f, note, digest) => navigate({ folder: f, subtopic: digest ? `digest:${note}` : note })}
+          />
         </main>
       ) : page === 'trash' ? (
         <main className="settings-page" aria-label="Trash">
@@ -487,6 +606,10 @@ export function App(): React.JSX.Element {
             onDelete={(slug, title) => void deleteNote(slug, title)}
             onEditPoint={editPoint}
             onSetPointDeleted={setPointDeleted}
+            digests={digests}
+            onNewDigest={() => setPickingDigest(true)}
+            onRegenerateDigest={openDigestDialog}
+            onDeleteDigest={(id, title) => void deleteDigest(id, title)}
           />
         </>
       )}
@@ -498,9 +621,22 @@ export function App(): React.JSX.Element {
         onDismiss={(id) => void lode.generate.dismiss(id)}
       />
 
+      {pickingDigest && vaultId && folder && folderInfo && (
+        <DigestPicker
+          vaultId={vaultId}
+          folder={folder}
+          folderTitle={folderInfo.title}
+          onClose={() => setPickingDigest(false)}
+          onPick={(period: DigestPeriod) => {
+            setPickingDigest(false);
+            openDigestDialog(period.id, period.title);
+          }}
+        />
+      )}
+
       {dialog && vaultId && (
         <GenerateDialog
-          key={dialog.kind === 'job' ? dialog.jobId : `new-${dialog.folder}-${dialog.subtopic ?? ''}`}
+          key={dialog.kind === 'job' ? dialog.jobId : `new-${dialog.folder}-${dialog.subtopic ?? ''}-${dialog.digest ?? ''}`}
           vaultId={vaultId}
           target={dialog}
           jobs={jobs}

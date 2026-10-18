@@ -10,6 +10,8 @@ const alias = {
 export default defineConfig({
   main: {
     resolve: { alias },
+    // Bundle runtime dependencies so packaged builds need no node_modules.
+    build: { externalizeDeps: false },
   },
   preload: {
     resolve: { alias },

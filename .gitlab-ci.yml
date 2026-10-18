@@ -1,0 +1,112 @@
+# Lode CI (HLD §13). Checks run on every push and merge request; tagged releases build packages.
+# Windows and macOS builds need GitLab's hosted Windows/macOS runners, so they are manual jobs.
+
+stages: [check, e2e, package]
+
+default:
+  image: node:24-bookworm
+  interruptible: true
+
+variables:
+  PNPM_HOME: /root/.pnpm
+  PNPM_STORE_DIR: $CI_PROJECT_DIR/.pnpm-store
+  ELECTRON_CACHE: $CI_PROJECT_DIR/.cache/electron
+  ELECTRON_BUILDER_CACHE: $CI_PROJECT_DIR/.cache/electron-builder
+
+.pnpm: &pnpm
+  cache:
+    key:
+      files: [pnpm-lock.yaml]
+    paths: [.pnpm-store, .cache/electron, .cache/electron-builder]
+  before_script:
+    - corepack enable
+    - pnpm config set store-dir "$PNPM_STORE_DIR"
+    - pnpm install --frozen-lockfile
+
+# Shared libraries Electron needs on a headless Debian image, plus a virtual display.
+.electron-deps: &electron-deps
+  - apt-get update -qq
+  - >-
+    apt-get install -y -qq --no-install-recommends xvfb xauth libnss3 libatk-bridge2.0-0 libgtk-3-0
+    libgbm1 libasound2 libxss1 libxtst6 libnotify4 libsecret-1-0 libdrm2 libxkbcommon0 > /dev/null
+
+check:
+  stage: check
+  <<: *pnpm
+  script:
+    - pnpm typecheck
+    - pnpm lint
+    - pnpm test
+
+e2e:
+  stage: e2e
+  <<: *pnpm
+  script:
+    - *electron-deps
+    - xvfb-run -a pnpm test:e2e
+  artifacts:
+    when: on_failure
+    expire_in: 1 week
+    paths: [test-results/]
+
+package:linux:
+  stage: package
+  <<: *pnpm
+  rules:
+    - if: $CI_COMMIT_TAG
+    - when: manual
+      allow_failure: true
+  script:
+    - *electron-deps
+    - apt-get install -y -qq --no-install-recommends rpm > /dev/null
+    - pnpm package
+    # Smoke-test the packaged build, not just the dev bundle.
+    - LODE_E2E_EXECUTABLE=dist/linux-unpacked/lode xvfb-run -a pnpm exec playwright test tests/e2e/capture.spec.ts
+  artifacts:
+    expire_in: 30 days
+    paths:
+      - dist/*.AppImage
+      - dist/*.deb
+      - dist/*.rpm
+
+package:windows:
+  stage: package
+  tags: [saas-windows-medium-amd64]
+  image: null
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
+      allow_failure: true
+  cache: []
+  before_script:
+    # Any Node >= 24 works (node:sqlite); pnpm comes from npm because corepack left Node in v25.
+    - choco install nodejs-lts -y --no-progress
+    - $env:Path = "C:\Program Files\nodejs;$env:APPDATA\npm;$env:Path"
+    - npm install -g pnpm@12.14.0
+    - pnpm install --frozen-lockfile
+  script:
+    - pnpm package:win
+  artifacts:
+    expire_in: 30 days
+    paths: [dist/*.exe]
+
+package:macos:
+  stage: package
+  tags: [saas-macos-medium-m1]
+  image: macos-15-xcode-16
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
+      allow_failure: true
+  cache: []
+  before_script:
+    - brew install node@24
+    - export PATH="$(brew --prefix node@24)/bin:$PATH"
+    - npm install -g pnpm@12.14.0
+    - pnpm install --frozen-lockfile
+  script:
+    # Unsigned: Gatekeeper will ask the user to approve the app on first launch.
+    - CSC_IDENTITY_AUTO_DISCOVERY=false pnpm package:mac
+  artifacts:
+    expire_in: 30 days
+    paths: [dist/*.dmg]

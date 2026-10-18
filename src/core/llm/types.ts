@@ -24,6 +24,8 @@ export interface GenerationInput {
   subtopics: readonly { slug: string; title: string }[];
   /** Earlier, already-filed points (short excerpts) so the model can flag repeats. File mode only. */
   knownPoints?: readonly GenerationPoint[];
+  /** Set for a digest: recap the points of this period instead of filing them. */
+  digest?: { title: string; from: string; to: string };
   /** Set for Regenerate: every point is already filed under this subtopic. */
   regenerate?: { slug: string; title: string };
   /** Set when retrying after invalid output, describing what was wrong. */

@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "description": "Local-first learning backlog that an LLM organises into subtopic notes, with your own points highlighted.",
-  "author": "Kumudu",
+  "author": {
+    "name": "Kumudu Mohottala",
+    "email": "kumudulaksitha@gmail.com"
+  },
   "license": "UNLICENSED",
   "main": "./out/main/index.js",
   "scripts": {
@@ -14,33 +17,40 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "electron-vite build && playwright test",
-    "package": "echo \"Packaging lands in M6\" && exit 1",
-    "eval": "vitest run --config vitest.eval.config.mts"
-  },
-  "dependencies": {
-    "@fontsource-variable/inter": "^5.3.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1",
-    "yaml": "^2.9.1",
-    "zod": "^4.6.7"
+    "package": "electron-vite build && electron-builder --linux --publish never",
+    "eval": "vitest run --config vitest.eval.config.mts",
+    "package:win": "electron-vite build && electron-builder --win --publish never",
+    "package:mac": "electron-vite build && electron-builder --mac --publish never"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@fontsource-variable/inter": "^5.3.0",
     "@playwright/test": "^1.64.1",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^44.9.0",
+    "electron-builder": "26.15.3",
     "electron-vite": "^6.0.0",
     "eslint": "^10.13.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.2",
     "vite": "^8.3.4",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "homepage": "https://gitlab.com/mohotta/lode",
+  "desktopName": "lode.desktop",
+  "packageManager": "pnpm@12.14.0",
+  "engines": {
+    "node": ">=24"
   }
 }

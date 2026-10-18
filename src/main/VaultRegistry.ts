@@ -1,8 +1,11 @@
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { VaultInfo } from '@shared/types';
+import { SearchIndex } from '@core/index/SearchIndex';
 import { BacklogRepo } from '@core/repos/BacklogRepo';
+import { DigestRepo } from '@core/repos/DigestRepo';
 import { NoteRepo } from '@core/repos/NoteRepo';
+import { ReviewRepo } from '@core/repos/ReviewRepo';
 import { TrashRepo } from '@core/repos/TrashRepo';
 import { Vault } from '@core/repos/Vault';
 import { VaultService } from '@core/repos/VaultService';
@@ -15,6 +18,9 @@ export interface OpenVault {
   backlog: BacklogRepo;
   notes: NoteRepo;
   trash: TrashRepo;
+  review: ReviewRepo;
+  index: SearchIndex;
+  digests: DigestRepo;
 }
 
 export function vaultIdFor(path: string): string {
@@ -51,6 +57,7 @@ export class VaultRegistry {
   }
 
   async forget(id: string): Promise<void> {
+    this.open.get(id)?.index.close();
     this.open.delete(id);
     await this.settings.update((s) => ({
       ...s,
@@ -74,6 +81,9 @@ export class VaultRegistry {
       backlog: new BacklogRepo(vault),
       notes: new NoteRepo(vault),
       trash: new TrashRepo(vault),
+      review: new ReviewRepo(vault),
+      digests: new DigestRepo(vault),
+      index: new SearchIndex(vault, async () => new Map((await service.listFolders()).map((f) => [f.slug, f.title]))),
     };
     this.open.set(id, opened);
     await this.settings.update((s) => ({ ...s, lastVaultId: id }));

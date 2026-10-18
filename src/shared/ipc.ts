@@ -13,6 +13,8 @@ const vaultId = z.string().regex(/^[a-f0-9]{16}$/);
 const keyId = z.enum(['llm', 'tavily']);
 const pointId = z.string().regex(/^p-[0-9a-z]{8}$/);
 const jobId = z.string().regex(/^j-[0-9a-f]{8,16}$/);
+/** A digest period: ISO week `2026-W42` or month `2026-10`. */
+const digestId = z.string().regex(/^\d{4}-(?:W(?:0[1-9]|[1-4]\d|5[0-3])|(?:0[1-9]|1[0-2]))$/);
 const STAMP = '\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z';
 const SLUG = '[a-z0-9]+(?:-[a-z0-9]+)*';
 /** A path inside `.lode/trash/` as returned by `trash:list`; re-checked in core before any fs call. */
@@ -50,6 +52,19 @@ export const Schemas = {
   'trash:restore': z.object({ vaultId, id: trashId }),
   /** Without `id`, empties the whole trash. */
   'trash:purge': z.object({ vaultId, id: trashId.optional() }),
+  'review:list': z.object({ vaultId }),
+  'review:mark': z.object({
+    vaultId,
+    items: z
+      .array(z.object({ id: pointId, stage: z.union([z.literal(1), z.literal(7), z.literal(30)]) }))
+      .min(1)
+      .max(1000),
+  }),
+  'search:query': z.object({ vaultId, q: z.string().min(1).max(200), limit: z.number().int().min(1).max(200).optional() }),
+  'digest:periods': z.object({ vaultId, folder: slug }),
+  'digest:list': z.object({ vaultId, folder: slug }),
+  'digest:read': z.object({ vaultId, folder: slug, digest: digestId }),
+  'digest:delete': z.object({ vaultId, folder: slug, digest: digestId }),
   'link:open': z.object({ url: z.string().url().max(2048) }),
   'settings:get': z.object({}),
   'settings:set': z.object({
@@ -71,8 +86,9 @@ export const Schemas = {
   'keys:test': z.object({ id: keyId }),
   'keys:clear': z.object({ id: keyId }),
   /** With `subtopic`, previews a Regenerate of that note instead of a Generate. */
-  'generate:preview': z.object({ vaultId, folder: slug, subtopic: slug.optional() }),
-  'generate:enqueue': z.object({ vaultId, folder: slug, subtopic: slug.optional() }),
+  /** With `digest`, previews a digest for that period. */
+  'generate:preview': z.object({ vaultId, folder: slug, subtopic: slug.optional(), digest: digestId.optional() }),
+  'generate:enqueue': z.object({ vaultId, folder: slug, subtopic: slug.optional(), digest: digestId.optional() }),
   'generate:jobs': z.object({}),
   'generate:cancel': z.object({ jobId }),
   'generate:dismiss': z.object({ jobId }),
@@ -98,8 +114,10 @@ export interface SettingsView {
   allowWeakKeyStorage: boolean;
 }
 
+export type JobKind = 'generate' | 'regenerate' | 'digest';
+
 export interface PreviewView {
-  kind: 'generate' | 'regenerate';
+  kind: JobKind;
   points: number;
   chunks: number;
   estimatedInputTokens: number;
@@ -135,9 +153,12 @@ export interface JobView {
   vaultId: string;
   folder: string;
   folderTitle: string;
-  kind: 'generate' | 'regenerate';
+  kind: JobKind;
   subtopic?: string;
   subtopicTitle?: string;
+  /** Digest jobs: the period ID and its title. */
+  digest?: string;
+  digestTitle?: string;
   status: JobStatus;
   progress: ProgressView | null;
   report?: RunReportView;

@@ -12,6 +12,8 @@ import {
   PencilIcon,
   PlusIcon,
   RefreshIcon,
+  ReviewIcon,
+  SearchIcon,
   SunIcon,
   TrashIcon,
   VaultIcon,
@@ -28,6 +30,9 @@ interface Props {
   settingsOpen: boolean;
   trashOpen: boolean;
   trashCount: number;
+  reviewOpen: boolean;
+  reviewCount: number;
+  searchOpen: boolean;
   theme: ThemePref;
   onTheme(t: ThemePref): void;
   onSelectVault(id: string): void;
@@ -42,6 +47,8 @@ interface Props {
   onDeleteSubtopic(slug: string, title: string): void;
   onOpenSettings(): void;
   onOpenTrash(): void;
+  onOpenReview(): void;
+  onOpenSearch(): void;
 }
 
 const NEXT_THEME: Record<ThemePref, ThemePref> = { system: 'dark', dark: 'light', light: 'system' };
@@ -99,6 +106,26 @@ export function Sidebar(p: Props): React.JSX.Element {
       <div className="sidebar-scroll">
         {vault ? (
           <>
+            <div className="nav-items">
+              <button
+                className={`tree-item ${p.searchOpen ? 'selected' : ''}`}
+                onClick={p.onOpenSearch}
+                title="Search points and notes (Ctrl+K)"
+              >
+                <SearchIcon size={15} className="tree-icon" />
+                <span className="tree-label">Search</span>
+                <kbd className="nav-kbd">Ctrl K</kbd>
+              </button>
+              <button className={`tree-item ${p.reviewOpen ? 'selected' : ''}`} onClick={p.onOpenReview}>
+                <ReviewIcon size={15} className="tree-icon" />
+                <span className="tree-label">Review</span>
+                {p.reviewCount > 0 && (
+                  <span className="tree-count due" aria-label={`${p.reviewCount} due`}>
+                    {p.reviewCount}
+                  </span>
+                )}
+              </button>
+            </div>
             <div className="section-head">
               <span>Folders</span>
               <button className="icon-btn" aria-label="New folder" title="New folder" onClick={() => setAdding(true)}>
@@ -130,7 +157,7 @@ export function Sidebar(p: Props): React.JSX.Element {
                 }
                 return (
                   <li key={f.slug}>
-                    <div className={`tree-row ${active && !p.activeSubtopic && !p.settingsOpen && !p.trashOpen ? 'selected' : ''}`}>
+                    <div className={`tree-row ${active && !p.activeSubtopic && !p.settingsOpen && !p.trashOpen && !p.reviewOpen && !p.searchOpen ? 'selected' : ''}`}>
                       <button
                         className="tree-item"
                         aria-current={active ? 'page' : undefined}
@@ -188,7 +215,7 @@ export function Sidebar(p: Props): React.JSX.Element {
                             </li>
                           ) : (
                             <li key={s.slug}>
-                              <div className={`tree-row ${s.slug === p.activeSubtopic && !p.settingsOpen && !p.trashOpen ? 'selected' : ''}`}>
+                              <div className={`tree-row ${s.slug === p.activeSubtopic && !p.settingsOpen && !p.trashOpen && !p.reviewOpen && !p.searchOpen ? 'selected' : ''}`}>
                                 <button
                                   className="tree-item"
                                   aria-current={s.slug === p.activeSubtopic ? 'true' : undefined}

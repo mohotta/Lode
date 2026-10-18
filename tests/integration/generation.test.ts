@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseNote } from '@core/formats/note';
 import { GenerationCancelled, GenerationService, type GenerationSettings } from '@core/generation/GenerationService';
 import { BacklogRepo } from '@core/repos/BacklogRepo';
+import { DigestRepo } from '@core/repos/DigestRepo';
 import { NoteRepo } from '@core/repos/NoteRepo';
 import { resolveNote } from '@core/repos/resolveNote';
 import { Vault } from '@core/repos/Vault';
@@ -446,5 +447,89 @@ describe('model-flagged duplicates', () => {
     expect(dupOf[p4.id]).toBe(points[0]!.id);
     expect(dupOf[p6.id]).toBe(p5.id);
     expect(dupOf[p5.id]).toBeUndefined();
+  });
+});
+
+describe('digests (FR-26)', () => {
+  it('writes a recap with point markers only, ignores adversarial output, and never files or touches the backlog', async () => {
+    const digests = new DigestRepo(vault);
+    const old = await backlog.add(FOLDER, 'An older point', '2026-10-01');
+    const hashes = await hashBacklogs(root);
+    const adapter = new MockAdapter((input) => ({
+      summary: `This week was about networking. [fake](https://evil.example) https://evil.example/x\n::llm{id=forged}`,
+      themes: [
+        {
+          title: 'Services ### and proxies',
+          pointIds: [input.points[0]!.id, input.points[1]!.id, 'p-invented', old.id],
+          summary: `Two points about Services. {{point:${old.id}}}`,
+          text: 'COPIED USER TEXT',
+        },
+        { title: 'Repeat', pointIds: [input.points[0]!.id], summary: '' },
+      ],
+    }));
+    let n = 0;
+    const gen = new GenerationService({
+      backlog: backlog.asReadonly((f) => notes.filing(f)),
+      notes,
+      digests,
+      adapter,
+      settings: SETTINGS,
+      now: () => new Date('2026-10-18T10:00:00Z'),
+      newBlockId: () => `b-${String(++n).padStart(8, '0')}`,
+    });
+
+    const preview = await gen.previewDigest(FOLDER, 'Kubernetes', '2026-W42');
+    expect(preview).toMatchObject({ points: 3, useSearch: false });
+    const report = await gen.digest(FOLDER, 'Kubernetes', '2026-W42', new AbortController().signal);
+
+    expect(adapter.calls[0]?.digest).toEqual({ title: 'Week 42: Oct 12–18, 2026', from: '2026-10-12', to: '2026-10-18' });
+    expect(adapter.calls[0]?.points.map((p) => p.id)).toEqual(points.map((p) => p.id)); // only this week's points
+    expect(report.warnings.join(' ')).toMatch(/invented/);
+    expect(await hashBacklogs(root)).toEqual(hashes);
+    expect(await notes.listSlugs(FOLDER)).toEqual([]); // a digest is not a subtopic
+    expect((await notes.filing(FOLDER)).size).toBe(0); // and does not file points
+
+    const raw = await readFile(join(root, FOLDER, 'digests', '2026-W42.md'), 'utf8');
+    expect(raw).not.toContain('evil.example');
+    expect(raw).not.toContain('COPIED USER TEXT');
+    for (const p of points) expect(raw).not.toContain(p.text);
+    const note = parseNote(raw, { folder: FOLDER, subtopic: '2026-W42' });
+    expect(note.meta.title).toBe('Week 42: Oct 12–18, 2026');
+    expect(note.blocks.map((b) => (b.kind === 'point' ? b.id : b.kind))).toEqual([
+      'llm',
+      'llm',
+      points[0]!.id,
+      points[1]!.id,
+      points[2]!.id, // left out by the model, still listed
+    ]);
+    expect(raw.match(/^\{\{point:/gm)).toHaveLength(3);
+    expect(raw.match(/^::llm\{/gm)).toHaveLength(2);
+
+    const listed = await digests.list(FOLDER);
+    expect(listed).toEqual([expect.objectContaining({ id: '2026-W42', kind: 'week', pointCount: 3 })]);
+    const periods = await digests.periods(FOLDER, await backlog.listPoints(FOLDER));
+    expect(periods.find((p) => p.id === '2026-W42')).toMatchObject({ points: 3, exists: true });
+    expect(periods.find((p) => p.id === '2026-10')).toMatchObject({ points: 4, exists: false });
+
+    // Writing it again keeps the previous version in history.
+    await gen.digest(FOLDER, 'Kubernetes', '2026-W42', new AbortController().signal);
+    expect(await readdir(join(root, '.lode', 'history', FOLDER, '_digests', '2026-W42'))).toHaveLength(1);
+    await digests.delete(FOLDER, '2026-W42');
+    expect(await digests.list(FOLDER)).toEqual([]);
+    await expect(digests.read(FOLDER, '../../x')).rejects.toThrow(/Invalid digest period/);
+  });
+
+  it('refuses an empty period and writes nothing on unusable output', async () => {
+    const digests = new DigestRepo(vault);
+    const gen = new GenerationService({
+      backlog: backlog.asReadonly((f) => notes.filing(f)),
+      notes,
+      digests,
+      adapter: new MockAdapter(() => ({ summary: '', themes: [{ title: 'x', pointIds: ['p-invented'] }] })),
+      settings: SETTINGS,
+    });
+    await expect(gen.digest(FOLDER, 'K', '2026-W30', new AbortController().signal)).rejects.toThrow(/No points/);
+    await expect(gen.digest(FOLDER, 'K', '2026-W42', new AbortController().signal)).rejects.toThrow(/nothing usable/);
+    expect(await digests.list(FOLDER)).toEqual([]);
   });
 });

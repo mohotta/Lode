@@ -1,13 +1,21 @@
 import type { AddResult, JobView, KeyIdName, PreviewView, Result, SettingsView } from '@shared/ipc';
 import type {
   BacklogDay,
+  DigestInfo,
+  DigestPeriod,
   FolderInfo,
   Point,
   ResolvedNote,
+  ReviewItem,
+  ReviewStage,
+  SearchHit,
   SubtopicInfo,
   TrashItem,
   VaultInfo,
 } from '@shared/types';
+
+/** What a Generate-family job works on: unfiled points (empty), one note, or one digest period. */
+export type JobTarget = { subtopic?: string; digest?: string };
 
 type R<T> = Promise<Result<T>>;
 
@@ -49,6 +57,21 @@ export interface LodeApi {
     /** Permanently deletes one item, or everything when `id` is omitted. */
     purge(vaultId: string, id?: string): R<void>;
   };
+  review: {
+    /** Points due for review today, across the vault's folders. */
+    list(vaultId: string): R<ReviewItem[]>;
+    mark(vaultId: string, items: { id: string; stage: ReviewStage }[]): R<void>;
+  };
+  search: {
+    query(vaultId: string, q: string, limit?: number): R<SearchHit[]>;
+  };
+  digest: {
+    /** Recent weeks and months that have points, newest first. */
+    periods(vaultId: string, folder: string): R<DigestPeriod[]>;
+    list(vaultId: string, folder: string): R<DigestInfo[]>;
+    read(vaultId: string, folder: string, digest: string): R<ResolvedNote>;
+    delete(vaultId: string, folder: string, digest: string): R<void>;
+  };
   link: {
     open(url: string): R<void>;
   };
@@ -68,10 +91,10 @@ export interface LodeApi {
     clear(id: KeyIdName): R<boolean>;
   };
   generate: {
-    /** With `subtopic`, previews a Regenerate of that note. */
-    preview(vaultId: string, folder: string, subtopic?: string): R<PreviewView>;
-    /** Queues a background Generate (or a Regenerate with `subtopic`) and returns at once. */
-    enqueue(vaultId: string, folder: string, subtopic?: string): R<JobView>;
+    /** With a target, previews a Regenerate of that note or a digest for that period. */
+    preview(vaultId: string, folder: string, target?: JobTarget): R<PreviewView>;
+    /** Queues a background Generate, Regenerate or digest and returns at once. */
+    enqueue(vaultId: string, folder: string, target?: JobTarget): R<JobView>;
     jobs(): R<JobView[]>;
     cancel(jobId: string): R<void>;
     /** Removes a finished job from the status bar. */

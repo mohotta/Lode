@@ -4,10 +4,13 @@ import type { ReadonlyBacklog } from '../repos/ReadonlyBacklog';
 import type { GenerationInput, GenerationPoint, LlmAdapter, SearchResult, Usage } from '../llm/types';
 import { ProviderError } from '../llm/types';
 import { duplicatesIn, parseNote, pointIdsIn, type NoteFile } from '../formats/note';
+import { inPeriod, periodRange } from '../formats/period';
 import { layoutRegenerated, planNotes, type NotePlan } from './blocks';
-import { estimateTokens, systemPrompt, userPrompt } from './prompt';
+import { digestSystemPrompt, estimateTokens, systemPrompt, userPrompt } from './prompt';
 import {
+  parseDigestOutput,
   parseOutput,
+  validateDigest,
   validateOutput,
   type UnsourcedPolicy,
   type ValidAssignment,
@@ -27,6 +30,11 @@ export interface NoteWriter {
   readRaw(folder: string, subtopic: string): Promise<string | null>;
   /** Regenerate's write: replaces the note body if it still equals `expected`, keeping a history snapshot. */
   replaceBlocks(folder: string, subtopic: string, expected: string, blocks: readonly Block[], updated: string): Promise<void>;
+}
+
+/** Where digests are written. Implemented by DigestRepo (`<folder>/digests/`). */
+export interface DigestWriter {
+  write(folder: string, id: string, title: string, blocks: readonly Block[], updated: string): Promise<void>;
 }
 
 export interface GenerationSettings {
@@ -95,6 +103,7 @@ export class GenerationCancelled extends Error {
 export interface GenerationDeps {
   backlog: ReadonlyBacklog;
   notes: NoteWriter;
+  digests?: DigestWriter;
   adapter: LlmAdapter;
   settings: GenerationSettings;
   now?: () => Date;
@@ -438,6 +447,102 @@ export class GenerationService {
       usage: got.usage,
       sources: this.sources(got),
       corrected: got.corrections.map((c) => c.pointId),
+      duplicates: [],
+    };
+  }
+
+  private async digestJob(folder: string, folderTitle: string, periodId: string): Promise<{ input: GenerationInput; title: string }> {
+    const range = periodRange(periodId);
+    if (!range) throw new Error('Invalid digest period');
+    const points = (await this.deps.backlog.listLive(folder)).filter((p) => inPeriod(p.date, range));
+    return {
+      title: range.title,
+      input: {
+        folderTitle,
+        points: points.map((p) => ({ id: p.id, text: p.text, date: p.date })),
+        subtopics: [],
+        digest: { title: range.title, from: range.from, to: range.to },
+      },
+    };
+  }
+
+  async previewDigest(folder: string, folderTitle: string, periodId: string): Promise<Preview> {
+    const { input } = await this.digestJob(folder, folderTitle, periodId);
+    const inputTokens = estimateTokens(digestSystemPrompt() + userPrompt(input));
+    return {
+      points: input.points.length,
+      chunks: input.points.length ? 1 : 0,
+      estimatedInputTokens: inputTokens,
+      estimatedOutputTokens: 300 + input.points.length * 40,
+      useSearch: false,
+      overCap: inputTokens > this.deps.settings.maxInputTokens,
+    };
+  }
+
+  /**
+   * Weekly or monthly digest (FR-26, HLD §6.5): the period's points go to the model in one
+   * call, without web search; the recap is written with the point markers, never their text.
+   */
+  async digest(
+    folder: string,
+    folderTitle: string,
+    periodId: string,
+    signal: AbortSignal,
+    onProgress: (e: ProgressEvent) => void = () => {},
+  ): Promise<GenerationReport> {
+    const writer = this.deps.digests;
+    if (!writer) throw new Error('Digests are not available');
+    onProgress({ phase: 'collecting' });
+    const { input, title } = await this.digestJob(folder, folderTitle, periodId);
+    if (input.points.length === 0) throw new Error('No points in this period.');
+    const usage: Usage = { inputTokens: 0, outputTokens: 0, searches: 0 };
+    const call = async (repairHint?: string): Promise<unknown> => {
+      if (signal.aborted) throw new GenerationCancelled();
+      onProgress({ phase: 'calling', chunk: 1, chunks: 1, retry: !!repairHint });
+      try {
+        const res = await this.deps.adapter.generate(repairHint ? { ...input, repairHint } : input, {
+          signal,
+          useSearch: false,
+          maxSearches: 0,
+        });
+        usage.inputTokens += res.usage.inputTokens;
+        usage.outputTokens += res.usage.outputTokens;
+        return res.json;
+      } catch (err) {
+        if (signal.aborted || (err instanceof ProviderError && err.kind === 'cancelled')) throw new GenerationCancelled();
+        throw err;
+      }
+    };
+    let parsed = parseDigestOutput(await call());
+    if (!parsed.ok) parsed = parseDigestOutput(await call(parsed.error));
+    if (!parsed.ok) throw new Error(`The model returned invalid output twice (${parsed.error}).`);
+    if (signal.aborted) throw new GenerationCancelled();
+
+    const sentIds = input.points.map((p) => p.id);
+    const v = validateDigest(parsed.output, sentIds);
+    if (!v.summary && v.themes.length === 0) throw new Error('The model returned nothing usable; no digest was written.');
+    const meta = { model: this.deps.adapter.modelLabel, at: this.now().toISOString() };
+    const llm = (body: string): Block => ({ kind: 'llm', id: this.newBlockId(), ...meta, body, sources: [] });
+    const blocks: Block[] = [];
+    if (v.summary) blocks.push(llm(v.summary));
+    for (const t of v.themes) {
+      blocks.push(llm(t.summary ? `### ${t.title}\n\n${t.summary}` : `### ${t.title}`));
+      for (const id of t.pointIds) blocks.push({ kind: 'point', id });
+    }
+    // Points the model left out are still listed, so the digest covers the whole period.
+    for (const id of v.leftovers) blocks.push({ kind: 'point', id });
+
+    onProgress({ phase: 'writing', subtopics: 1 });
+    await writer.write(folder, periodId, title, blocks, this.now().toISOString());
+    onProgress({ phase: 'done' });
+    return {
+      changed: [{ slug: periodId, title, isNew: false }],
+      filed: sentIds,
+      unfiled: [],
+      warnings: v.warnings,
+      usage,
+      sources: 0,
+      corrected: [],
       duplicates: [],
     };
   }

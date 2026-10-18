@@ -56,7 +56,16 @@ export async function startFakes(): Promise<Fakes> {
     const data = JSON.parse(user.slice(user.indexOf('<data>') + 6, user.indexOf('</data>'))) as {
       points: Array<{ id: string; text: string }>;
       regenerate?: { slug: string };
+      period?: { title: string };
     };
+    if (data.period) {
+      const digest = {
+        summary: `Recap of ${data.period.title}: mostly Kubernetes networking.`,
+        themes: [{ title: 'Service networking', pointIds: data.points.map((p) => p.id), summary: 'How traffic reaches pods.' }],
+      };
+      res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: JSON.stringify(digest) } }], usage }));
+      return;
+    }
     const ipvs = data.points.find((p) => p.text.includes('IPVS'));
     const output = {
       assignments: [
