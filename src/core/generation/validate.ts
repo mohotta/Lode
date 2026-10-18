@@ -28,9 +28,16 @@ export interface ValidCorrection {
   unsourced: boolean;
 }
 
+export interface ValidDuplicate {
+  pointId: PointId;
+  /** The earliest point it repeats: from this run (sent earlier) or an already-filed known point. */
+  duplicateOf: PointId;
+}
+
 export interface ValidationReport {
   assignments: ValidAssignment[];
   corrections: ValidCorrection[];
+  duplicates: ValidDuplicate[];
   /** Points sent but not validly assigned. */
   leftovers: PointId[];
   warnings: string[];
@@ -38,7 +45,10 @@ export interface ValidationReport {
 }
 
 export interface ValidateContext {
+  /** Oldest first; a repeat can only point at an earlier one. */
   sentIds: readonly PointId[];
+  /** Already-filed points shown to the model for duplicate detection. */
+  knownIds?: readonly PointId[];
   existingSubtopics: readonly { slug: string; title: string }[];
   searchResults: readonly SearchResult[];
   unsourced: UnsourcedPolicy;
@@ -195,9 +205,24 @@ export function validateOutput(output: GenerationOutput, ctx: ValidateContext): 
     );
   }
 
+  // Duplicates: IDs only; a repeat must point at a known point or one sent before it (no cycles).
+  const order = new Map(ctx.sentIds.map((id, i) => [id as string, i]));
+  const known = new Set<string>(ctx.knownIds ?? []);
+  const dupOf = new Map<PointId, PointId>();
+  const dups = [...output.duplicates].sort((a, b) => (order.get(a.pointId) ?? 0) - (order.get(b.pointId) ?? 0));
+  for (const d of dups) {
+    const i = order.get(d.pointId);
+    if (i === undefined || dupOf.has(d.pointId as PointId)) continue;
+    const j = order.get(d.duplicateOf);
+    if (!(known.has(d.duplicateOf) || (j !== undefined && j < i))) continue;
+    const root = dupOf.get(d.duplicateOf as PointId) ?? (d.duplicateOf as PointId);
+    dupOf.set(d.pointId as PointId, root);
+  }
+  const duplicates = [...dupOf].map(([pointId, duplicateOf]) => ({ pointId, duplicateOf }));
+
   if (stats.inventedIds) warnings.push(`Ignored ${stats.inventedIds} point ID(s) the model invented.`);
   if (stats.droppedAdditions) warnings.push(`Dropped ${stats.droppedAdditions} addition(s) without a verifiable source.`);
   if (stats.strippedLinks) warnings.push(`Removed ${stats.strippedLinks} link(s) that were not in the search results.`);
 
-  return { assignments: out, corrections, leftovers: ctx.sentIds.filter((id) => !assigned.has(id)), warnings, stats };
+  return { assignments: out, corrections, duplicates, leftovers: ctx.sentIds.filter((id) => !assigned.has(id)), warnings, stats };
 }

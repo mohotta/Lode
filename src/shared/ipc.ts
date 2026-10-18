@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Point } from './types';
 
 /**
  * IPC contract. Main validates every payload with these schemas; preload exposes
@@ -10,6 +11,12 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 const slug = z.string().min(1).max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 const vaultId = z.string().regex(/^[a-f0-9]{16}$/);
 const keyId = z.enum(['llm', 'tavily']);
+const pointId = z.string().regex(/^p-[0-9a-z]{8}$/);
+const jobId = z.string().regex(/^j-[0-9a-f]{8,16}$/);
+const STAMP = '\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z';
+const SLUG = '[a-z0-9]+(?:-[a-z0-9]+)*';
+/** A path inside `.lode/trash/` as returned by `trash:list`; re-checked in core before any fs call. */
+const trashId = z.string().max(300).regex(new RegExp(`^(?:${SLUG}-${STAMP}|notes/${SLUG}/${SLUG}-${STAMP}\\.md)$`));
 
 export const Schemas = {
   'vault:list': z.object({}),
@@ -28,11 +35,21 @@ export const Schemas = {
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
       .optional(),
+    /** Add even though it looks like an earlier point. Exact repeats are still refused. */
+    force: z.boolean().optional(),
   }),
+  'backlog:edit': z.object({ vaultId, folder: slug, id: pointId, text: z.string().min(1).max(4000) }),
+  'backlog:softDelete': z.object({ vaultId, folder: slug, id: pointId, deleted: z.boolean() }),
   'backlog:listDays': z.object({ vaultId, folder: slug }),
   'notes:list': z.object({ vaultId, folder: slug }),
   'notes:read': z.object({ vaultId, folder: slug, subtopic: slug }),
   'notes:rename': z.object({ vaultId, folder: slug, subtopic: slug, title: z.string().min(1).max(120) }),
+  'notes:delete': z.object({ vaultId, folder: slug, subtopic: slug }),
+  'notes:undoRegenerate': z.object({ vaultId, folder: slug, subtopic: slug }),
+  'trash:list': z.object({ vaultId }),
+  'trash:restore': z.object({ vaultId, id: trashId }),
+  /** Without `id`, empties the whole trash. */
+  'trash:purge': z.object({ vaultId, id: trashId.optional() }),
   'link:open': z.object({ url: z.string().url().max(2048) }),
   'settings:get': z.object({}),
   'settings:set': z.object({
@@ -53,9 +70,12 @@ export const Schemas = {
   'keys:has': z.object({ id: keyId }),
   'keys:test': z.object({ id: keyId }),
   'keys:clear': z.object({ id: keyId }),
-  'generate:preview': z.object({ vaultId, folder: slug }),
-  'generate:run': z.object({ vaultId, folder: slug }),
-  'generate:cancel': z.object({ vaultId, folder: slug }),
+  /** With `subtopic`, previews a Regenerate of that note instead of a Generate. */
+  'generate:preview': z.object({ vaultId, folder: slug, subtopic: slug.optional() }),
+  'generate:enqueue': z.object({ vaultId, folder: slug, subtopic: slug.optional() }),
+  'generate:jobs': z.object({}),
+  'generate:cancel': z.object({ jobId }),
+  'generate:dismiss': z.object({ jobId }),
 } as const;
 
 export type Channel = keyof typeof Schemas;
@@ -79,6 +99,7 @@ export interface SettingsView {
 }
 
 export interface PreviewView {
+  kind: 'generate' | 'regenerate';
   points: number;
   chunks: number;
   estimatedInputTokens: number;
@@ -103,7 +124,32 @@ export interface RunReportView {
   usage: { inputTokens: number; outputTokens: number; searches: number };
   sources: number;
   corrected: string[];
+  duplicates: string[];
 }
+
+export type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+
+/** A background Generate or Regenerate, as shown in the status bar. */
+export interface JobView {
+  id: string;
+  vaultId: string;
+  folder: string;
+  folderTitle: string;
+  kind: 'generate' | 'regenerate';
+  subtopic?: string;
+  subtopicTitle?: string;
+  status: JobStatus;
+  progress: ProgressView | null;
+  report?: RunReportView;
+  error?: string;
+  queuedAt: string;
+  finishedAt?: string;
+}
+
+/** `backlog:add` either adds the point or reports the earlier point it repeats (nothing written). */
+export type AddResult =
+  | { added: Point }
+  | { duplicate: { id: string; text: string; date: string; exact: boolean } };
 
 export type ProgressView =
   | { phase: 'collecting' }

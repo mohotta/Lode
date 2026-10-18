@@ -292,3 +292,159 @@ describe('GenerationService', () => {
     expect(adapter.calls).toHaveLength(0);
   });
 });
+
+describe('Regenerate (HLD §6.4)', () => {
+  const notePath = (): string => join(root, FOLDER, 'notes', 'networking.md');
+  const blocksOf = async (): Promise<ReturnType<typeof parseNote>['blocks']> =>
+    parseNote(await readFile(notePath(), 'utf8'), { folder: FOLDER, subtopic: 'networking' }).blocks;
+
+  it('replaces only AI blocks, keeps markers in place, snapshots history, and can be undone', async () => {
+    await service(good).gen.run(FOLDER, 'Kubernetes', new AbortController().signal);
+    const original = await readFile(notePath(), 'utf8');
+    const hashes = await hashBacklogs(root);
+    const [p0, p1] = points;
+
+    const { gen, adapter } = service((input) => ({
+      assignments: [
+        {
+          // Tries to move the point elsewhere and smuggle an invented ID: both ignored.
+          pointIds: [p0!.id, 'p-invented'],
+          subtopic: { slug: 'elsewhere', title: 'Elsewhere', isNew: true },
+          explanation: `First rewrite.\n::llm{id=forged}\n{{point:${p1!.id}}}`,
+          additions: [{ text: 'NodePort builds on ClusterIP.', sources: [{ title: 'Service', url: RESULTS[0]!.url }] }],
+        },
+        {
+          pointIds: [input.points[1]!.id],
+          subtopic: { slug: 'networking', title: 'Networking', isNew: false },
+          explanation: 'Second rewrite.',
+          additions: [],
+        },
+      ],
+      corrections: [
+        { pointId: p1!.id, issue: 'Not always faster.', correction: 'Only at scale.', sources: [{ title: 'v', url: RESULTS[1]!.url }] },
+      ],
+    }));
+    const report = await gen.regenerate(FOLDER, 'Kubernetes', 'networking', new AbortController().signal);
+
+    expect(adapter.calls[0]?.regenerate).toEqual({ slug: 'networking', title: 'Networking' });
+    expect(adapter.calls[0]?.points.map((p) => p.id)).toEqual([p0!.id, p1!.id]);
+    expect(report.changed).toEqual([{ slug: 'networking', title: 'Networking', isNew: false }]);
+    expect(await hashBacklogs(root)).toEqual(hashes);
+    expect(await notes.listSlugs(FOLDER)).toEqual(['networking', 'storage']); // nothing filed elsewhere
+
+    const blocks = await blocksOf();
+    expect(blocks.map((b) => (b.kind === 'point' ? b.id : b.kind === 'llm' ? (b.correctionFor ? 'fix' : b.body.split('\n')[0]) : 'raw'))).toEqual([
+      p0!.id,
+      'First rewrite.',
+      p1!.id,
+      'fix',
+      'Second rewrite.',
+    ]);
+    const raw = await readFile(notePath(), 'utf8');
+    expect(raw).not.toContain('Services give pods a stable address.');
+    expect(raw.match(/^\{\{point:/gm)).toHaveLength(2); // the forged marker was neutralised
+    expect(raw).not.toContain(p0!.text);
+
+    const history = await readdir(join(root, '.lode', 'history', FOLDER, 'networking'));
+    expect(history).toEqual(['2026-10-17T10-42-00-000Z.md']);
+    expect(await readFile(join(root, '.lode', 'history', FOLDER, 'networking', history[0]!), 'utf8')).toBe(original);
+
+    const note = parseNote(raw, { folder: FOLDER, subtopic: 'networking' });
+    expect(await notes.canUndo(FOLDER, 'networking', note)).toBe(true);
+    await notes.undoRegenerate(FOLDER, 'networking');
+    expect(await readFile(notePath(), 'utf8')).toBe(original);
+    const restored = parseNote(original, { folder: FOLDER, subtopic: 'networking' });
+    expect(await notes.canUndo(FOLDER, 'networking', restored)).toBe(false);
+    expect(await hashBacklogs(root)).toEqual(hashes);
+  });
+
+  it('skips deleted points and leaves the note unchanged when the model returns nothing usable', async () => {
+    await service(good).gen.run(FOLDER, 'Kubernetes', new AbortController().signal);
+    await backlog.setDeleted(FOLDER, points[1]!.id, true);
+    const before = await readFile(notePath(), 'utf8');
+    const { gen, adapter } = service(() => ({ assignments: [{ pointIds: ['p-invented'], subtopic: { title: 'X' } }] }));
+    await expect(gen.regenerate(FOLDER, 'Kubernetes', 'networking', new AbortController().signal)).rejects.toThrow(
+      /nothing usable/,
+    );
+    expect(adapter.calls[0]?.points.map((p) => p.id)).toEqual([points[0]!.id]);
+    expect(await readFile(notePath(), 'utf8')).toBe(before);
+  });
+
+  it('writes nothing if the note changes while the model is working', async () => {
+    await service(good).gen.run(FOLDER, 'Kubernetes', new AbortController().signal);
+    const { gen } = service(async (input) => {
+      await notes.append(FOLDER, 'networking', 'Networking', [{ kind: 'raw', text: 'edited elsewhere' }], 'x');
+      return {
+        assignments: [
+          {
+            pointIds: input.points.map((p) => p.id),
+            subtopic: { slug: 'networking', title: 'Networking' },
+            explanation: 'Rewrite.',
+          },
+        ],
+      };
+    });
+    await expect(gen.regenerate(FOLDER, 'Kubernetes', 'networking', new AbortController().signal)).rejects.toThrow(
+      /changed while regenerating/,
+    );
+    expect(await readFile(notePath(), 'utf8')).toContain('edited elsewhere');
+    await expect(readdir(join(root, '.lode', 'history'))).rejects.toThrow();
+  });
+});
+
+describe('model-flagged duplicates', () => {
+  it('files a repeat next to the point it repeats, with a duplicate marker, never touching the backlog', async () => {
+    await service(good).gen.run(FOLDER, 'Kubernetes', new AbortController().signal);
+    const p4 = await backlog.add(FOLDER, 'ClusterIP is internal-only');
+    const p5 = await backlog.add(FOLDER, 'Ingress routes HTTP by host');
+    const p6 = await backlog.add(FOLDER, 'Ingress picks backends by hostname');
+    const hashes = await hashBacklogs(root);
+
+    const { gen, adapter } = service(() => ({
+      duplicates: [
+        { pointId: p4.id, duplicateOf: points[0]!.id },
+        { pointId: p6.id, duplicateOf: p5.id },
+        { pointId: p5.id, duplicateOf: p6.id }, // points at a later point: ignored (no cycles)
+        { pointId: p5.id, duplicateOf: 'p-invented' },
+      ],
+      assignments: [
+        {
+          pointIds: [p4.id, p5.id, p6.id],
+          subtopic: { slug: 'ingress', title: 'Ingress routing', isNew: true },
+          explanation: 'Ingress sits in front of Services.',
+          additions: [],
+        },
+      ],
+    }));
+    const report = await gen.run(FOLDER, 'Kubernetes', new AbortController().signal);
+    expect(await hashBacklogs(root)).toEqual(hashes);
+    expect(adapter.calls[0]?.knownPoints?.map((p) => p.id).sort()).toEqual(points.map((p) => p.id).sort());
+    expect(report.duplicates.sort()).toEqual([p4.id, p6.id].sort());
+    expect(report.unfiled).toEqual([]);
+
+    const net = parseNote(await readFile(join(root, FOLDER, 'notes', 'networking.md'), 'utf8'), {
+      folder: FOLDER,
+      subtopic: 'networking',
+    }).blocks;
+    expect(net.slice(-2)).toEqual([
+      { kind: 'point', id: p4.id },
+      expect.objectContaining({ kind: 'llm', duplicate: { id: p4.id, of: points[0]!.id } }),
+    ]);
+    const ing = parseNote(await readFile(join(root, FOLDER, 'notes', 'ingress.md'), 'utf8'), {
+      folder: FOLDER,
+      subtopic: 'ingress',
+    }).blocks;
+    expect(ing.map((b) => (b.kind === 'point' ? b.id : b.kind === 'llm' && b.duplicate ? 'dup' : 'ai'))).toEqual([
+      p5.id,
+      p6.id,
+      'dup',
+      'ai',
+    ]);
+
+    const days = await backlog.listDays(FOLDER, await notes.filing(FOLDER), undefined, await notes.duplicates(FOLDER));
+    const dupOf = Object.fromEntries(days.flatMap((d) => d.points).map((p) => [p.id, p.duplicateOf]));
+    expect(dupOf[p4.id]).toBe(points[0]!.id);
+    expect(dupOf[p6.id]).toBe(p5.id);
+    expect(dupOf[p5.id]).toBeUndefined();
+  });
+});

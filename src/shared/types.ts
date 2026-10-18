@@ -29,6 +29,8 @@ export type Block =
       sources: Source[];
       /** Set for an AI correction note about one user point (the point text itself is never changed). */
       correctionFor?: PointId;
+      /** Set when the model judged point `id` to repeat the earlier point `of`. The body is fixed text. */
+      duplicate?: { id: PointId; of: PointId };
     }
   /** Text that is not a Lode block (e.g. an external edit). Preserved, rendered as plain text. */
   | { kind: 'raw'; text: string };
@@ -56,6 +58,8 @@ export interface PointWithFiling extends Point {
   filedUnder: string[];
   /** True when some note carries an AI correction note for this point. */
   corrected: boolean;
+  /** The earlier point this one repeats, when Generate flagged it as a duplicate. */
+  duplicateOf?: PointId;
 }
 
 export interface BacklogDay {
@@ -74,6 +78,8 @@ export type ResolvedBlock =
       missing: boolean;
       /** A correction note for this point exists in this note. */
       corrected: boolean;
+      /** Set when this point repeats an earlier one (flagged by Generate). */
+      duplicateOf?: { id: PointId; date: string };
     }
   | Extract<Block, { kind: 'llm' }>
   | Extract<Block, { kind: 'raw' }>;
@@ -84,4 +90,16 @@ export interface ResolvedNote {
   title: string;
   updated: string;
   blocks: ResolvedBlock[];
+  /** True when the last Regenerate of this note can still be undone. */
+  canUndo: boolean;
+}
+
+export interface TrashItem {
+  /** Path inside `.lode/trash/`, used as the item's ID. */
+  id: string;
+  kind: 'folder' | 'note';
+  title: string;
+  /** Folder slug: the folder itself, or the folder a note belonged to. */
+  folder: string;
+  deletedAt: string;
 }

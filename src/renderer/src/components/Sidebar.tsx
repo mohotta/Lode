@@ -11,6 +11,7 @@ import {
   MoonIcon,
   PencilIcon,
   PlusIcon,
+  RefreshIcon,
   SunIcon,
   TrashIcon,
   VaultIcon,
@@ -25,6 +26,8 @@ interface Props {
   subtopics: SubtopicInfo[];
   activeSubtopic: string | null;
   settingsOpen: boolean;
+  trashOpen: boolean;
+  trashCount: number;
   theme: ThemePref;
   onTheme(t: ThemePref): void;
   onSelectVault(id: string): void;
@@ -35,7 +38,10 @@ interface Props {
   onRenameFolder(slug: string, title: string): Promise<void>;
   onRenameSubtopic(slug: string, title: string): Promise<void>;
   onDeleteFolder(slug: string): Promise<void>;
+  onRegenerateSubtopic(slug: string, title: string): void;
+  onDeleteSubtopic(slug: string, title: string): void;
   onOpenSettings(): void;
+  onOpenTrash(): void;
 }
 
 const NEXT_THEME: Record<ThemePref, ThemePref> = { system: 'dark', dark: 'light', light: 'system' };
@@ -124,7 +130,7 @@ export function Sidebar(p: Props): React.JSX.Element {
                 }
                 return (
                   <li key={f.slug}>
-                    <div className={`tree-row ${active && !p.activeSubtopic && !p.settingsOpen ? 'selected' : ''}`}>
+                    <div className={`tree-row ${active && !p.activeSubtopic && !p.settingsOpen && !p.trashOpen ? 'selected' : ''}`}>
                       <button
                         className="tree-item"
                         aria-current={active ? 'page' : undefined}
@@ -153,7 +159,7 @@ export function Sidebar(p: Props): React.JSX.Element {
                               icon: <TrashIcon size={14} />,
                               danger: true,
                               onSelect: () => {
-                                if (confirm(`Move "${f.title}" to the vault trash (.lode/trash)?`)) void p.onDeleteFolder(f.slug);
+                                if (confirm(`Move "${f.title}" to the trash? You can restore it from Trash.`)) void p.onDeleteFolder(f.slug);
                               },
                             },
                           ]}
@@ -182,7 +188,7 @@ export function Sidebar(p: Props): React.JSX.Element {
                             </li>
                           ) : (
                             <li key={s.slug}>
-                              <div className={`tree-row ${s.slug === p.activeSubtopic && !p.settingsOpen ? 'selected' : ''}`}>
+                              <div className={`tree-row ${s.slug === p.activeSubtopic && !p.settingsOpen && !p.trashOpen ? 'selected' : ''}`}>
                                 <button
                                   className="tree-item"
                                   aria-current={s.slug === p.activeSubtopic ? 'true' : undefined}
@@ -208,6 +214,18 @@ export function Sidebar(p: Props): React.JSX.Element {
                                           setRenamingSub(s.slug);
                                           setRenameTitle(s.title);
                                         },
+                                      },
+                                      {
+                                        label: 'Regenerate',
+                                        icon: <RefreshIcon size={14} />,
+                                        onSelect: () => p.onRegenerateSubtopic(s.slug, s.title),
+                                      },
+                                      'separator',
+                                      {
+                                        label: 'Move to trash',
+                                        icon: <TrashIcon size={14} />,
+                                        danger: true,
+                                        onSelect: () => p.onDeleteSubtopic(s.slug, s.title),
                                       },
                                     ]}
                                   />
@@ -260,6 +278,17 @@ export function Sidebar(p: Props): React.JSX.Element {
           <GearIcon size={15} className="tree-icon" />
           <span className="tree-label">Settings</span>
         </button>
+        {vault && (
+          <button
+            className={`icon-btn trash-btn ${p.trashOpen ? 'selected' : ''}`}
+            aria-label={`Trash, ${p.trashCount} item(s)`}
+            title="Trash"
+            onClick={p.onOpenTrash}
+          >
+            <TrashIcon size={15} />
+            {p.trashCount > 0 && <span className="trash-count">{p.trashCount}</span>}
+          </button>
+        )}
         <button
           className="icon-btn"
           aria-label={`Theme: ${p.theme}. Switch to ${NEXT_THEME[p.theme]}`}

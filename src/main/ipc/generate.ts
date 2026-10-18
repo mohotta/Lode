@@ -3,10 +3,11 @@ import { z } from 'zod';
 import { atomicWrite } from '@core/fs/atomicWrite';
 import { readTextOrNull } from '@core/fs/readText';
 import { GenerationCancelled, GenerationService, type GenerationReport } from '@core/generation/GenerationService';
+import { JobQueue } from '@core/generation/JobQueue';
 import { OpenAiCompatibleAdapter } from '@core/llm/openaiCompatible';
 import { TavilySearch } from '@core/llm/tavily';
 import { LODE_DIR } from '@core/repos/Vault';
-import type { PreviewView, ProgressView } from '@shared/ipc';
+import type { PreviewView } from '@shared/ipc';
 import type { KeyStore } from '../KeyStore';
 import type { SettingsStore } from '../SettingsStore';
 import type { OpenVault, VaultRegistry } from '../VaultRegistry';
@@ -17,7 +18,13 @@ const TAVILY_URL = !app.isPackaged ? process.env.LODE_TAVILY_URL : undefined;
 
 const RunLog = z.array(z.unknown());
 
-async function logRun(v: OpenVault, folder: string, model: string, report: GenerationReport): Promise<void> {
+async function logRun(
+  v: OpenVault,
+  folder: string,
+  model: string,
+  report: GenerationReport,
+  kind: 'generate' | 'regenerate',
+): Promise<void> {
   // Local usage log (PRD cost transparency). Counts only: no point text, no keys.
   const path = await v.vault.path(LODE_DIR, 'runs.json');
   const raw = await readTextOrNull(path);
@@ -29,6 +36,7 @@ async function logRun(v: OpenVault, folder: string, model: string, report: Gener
   }
   runs.push({
     at: new Date().toISOString(),
+    kind,
     folder,
     model,
     usage: report.usage,
@@ -36,6 +44,7 @@ async function logRun(v: OpenVault, folder: string, model: string, report: Gener
     unfiled: report.unfiled.length,
     subtopics: report.changed.map((c) => c.slug),
     corrected: report.corrected.length,
+    duplicates: report.duplicates.length,
     // Generic pipeline messages only (counts and subtopic titles); never point text.
     warnings: report.warnings,
   });
@@ -43,9 +52,6 @@ async function logRun(v: OpenVault, folder: string, model: string, report: Gener
 }
 
 export function registerGenerateHandlers(registry: VaultRegistry, settings: SettingsStore, keys: KeyStore): void {
-  const running = new Map<string, AbortController>();
-  const runKey = (vaultId: string, folder: string): string => `${vaultId}/${folder}`;
-
   async function build(v: OpenVault): Promise<{ gen: GenerationService; blocker: string | null; model: string; baseUrl: string }> {
     const s = await settings.get();
     const hasTavily = await keys.has('tavily');
@@ -76,13 +82,45 @@ export function registerGenerateHandlers(registry: VaultRegistry, settings: Sett
     return (await v.service.listFolders()).find((f) => f.slug === folder)?.title ?? folder;
   }
 
-  handle('generate:preview', async ({ vaultId, folder }): Promise<PreviewView> => {
+  const OVER_CAP = 'This run exceeds the token ceiling in Settings. Raise it or generate in smaller batches.';
+
+  // Jobs run in the background, one at a time; the renderer follows them through `generate:jobs` events.
+  const queue = new JobQueue<GenerationReport>(
+    async (spec, signal, onProgress) => {
+      const v = await registry.get(spec.vaultId);
+      const { gen, blocker, model } = await build(v);
+      if (blocker) throw new Error(blocker);
+      const title = await folderTitle(v, spec.folder);
+      try {
+        const sub = spec.subtopic;
+        const preview = sub ? await gen.previewRegenerate(spec.folder, title, sub) : await gen.preview(spec.folder, title);
+        if (preview.overCap) throw new Error(OVER_CAP);
+        const report = sub
+          ? await gen.regenerate(spec.folder, title, sub, signal, onProgress)
+          : await gen.run(spec.folder, title, signal, onProgress);
+        await logRun(v, spec.folder, model, report, spec.kind).catch(() => undefined);
+        return report;
+      } catch (err) {
+        if (err instanceof GenerationCancelled) throw err;
+        const prefix = spec.kind === 'regenerate' ? 'Regenerate failed, the note is unchanged.' : 'Generation failed, nothing was written.';
+        throw new Error(`${prefix} ${err instanceof Error ? err.message : ''}`.trim(), { cause: err });
+      }
+    },
+    (jobs) => {
+      for (const w of BrowserWindow.getAllWindows()) w.webContents.send('generate:jobs', jobs);
+    },
+    (err) => err instanceof GenerationCancelled,
+  );
+
+  handle('generate:preview', async ({ vaultId, folder, subtopic }): Promise<PreviewView> => {
     const v = await registry.get(vaultId);
     const s = await settings.get();
     const { gen, blocker, model, baseUrl } = await build(v);
-    const p = await gen.preview(folder, await folderTitle(v, folder));
+    const title = await folderTitle(v, folder);
+    const p = subtopic ? await gen.previewRegenerate(folder, title, subtopic) : await gen.preview(folder, title);
     return {
       ...p,
+      kind: subtopic ? 'regenerate' : 'generate',
       searchUnavailable: s.generation.useSearch && !(await keys.has('tavily')),
       maxInputTokens: s.generation.maxInputTokens,
       provider: 'OpenAI-compatible',
@@ -91,43 +129,32 @@ export function registerGenerateHandlers(registry: VaultRegistry, settings: Sett
       blocker:
         blocker ??
         (p.points === 0
-          ? 'No unfiled points in this folder.'
+          ? subtopic
+            ? 'This note has no points left to regenerate from.'
+            : 'No unfiled points in this folder.'
           : p.overCap
-            ? 'This run exceeds the token ceiling in Settings. Raise it or generate in smaller batches.'
+            ? OVER_CAP
             : null),
     };
   });
 
-  handle('generate:run', async ({ vaultId, folder }) => {
-    const key = runKey(vaultId, folder);
-    if (running.has(key)) throw new Error('A generation run is already in progress for this folder');
+  handle('generate:enqueue', async ({ vaultId, folder, subtopic }) => {
     const v = await registry.get(vaultId);
-    const { gen, blocker, model } = await build(v);
+    const { blocker } = await build(v);
     if (blocker) throw new Error(blocker);
     const title = await folderTitle(v, folder);
-    if ((await gen.preview(folder, title)).overCap) {
-      throw new Error('This run exceeds the token ceiling in Settings. Raise it or generate in smaller batches.');
-    }
-    const ctrl = new AbortController();
-    running.set(key, ctrl);
-    const send = (event: ProgressView): void => {
-      for (const w of BrowserWindow.getAllWindows()) w.webContents.send('generate:progress', { vaultId, folder, event });
-    };
-    try {
-      const report = await gen.run(folder, title, ctrl.signal, send);
-      await logRun(v, folder, model, report).catch(() => undefined);
-      return report;
-    } catch (err) {
-      if (err instanceof GenerationCancelled) throw err;
-      throw new Error(`Generation failed, nothing was written. ${err instanceof Error ? err.message : ''}`.trim(), {
-        cause: err,
-      });
-    } finally {
-      running.delete(key);
-    }
+    const note = subtopic ? await v.notes.read(folder, subtopic) : null;
+    if (subtopic && !note) throw new Error('Note not found');
+    return queue.enqueue({
+      vaultId,
+      folder,
+      folderTitle: title,
+      kind: subtopic ? 'regenerate' : 'generate',
+      ...(subtopic && note ? { subtopic, subtopicTitle: note.meta.title } : {}),
+    });
   });
 
-  handle('generate:cancel', async ({ vaultId, folder }) => {
-    running.get(runKey(vaultId, folder))?.abort();
-  });
+  handle('generate:jobs', async () => queue.list());
+  handle('generate:cancel', async ({ jobId }) => queue.cancel(jobId));
+  handle('generate:dismiss', async ({ jobId }) => queue.dismiss(jobId));
 }

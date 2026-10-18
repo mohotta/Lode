@@ -20,13 +20,29 @@ const api: LodeApi = {
     delete: (vaultId, folder) => call('folder:delete')({ vaultId, folder }),
   },
   backlog: {
-    add: (vaultId, folder, text, date) => call('backlog:add')({ vaultId, folder, text, ...(date ? { date } : {}) }),
+    add: (vaultId, folder, text, opts = {}) =>
+      call('backlog:add')({
+        vaultId,
+        folder,
+        text,
+        ...(opts.date ? { date: opts.date } : {}),
+        ...(opts.force ? { force: true } : {}),
+      }),
+    edit: (vaultId, folder, id, text) => call('backlog:edit')({ vaultId, folder, id, text }),
+    softDelete: (vaultId, folder, id, deleted) => call('backlog:softDelete')({ vaultId, folder, id, deleted }),
     listDays: (vaultId, folder) => call('backlog:listDays')({ vaultId, folder }),
   },
   notes: {
     list: (vaultId, folder) => call('notes:list')({ vaultId, folder }),
     read: (vaultId, folder, subtopic) => call('notes:read')({ vaultId, folder, subtopic }),
     rename: (vaultId, folder, subtopic, title) => call('notes:rename')({ vaultId, folder, subtopic, title }),
+    delete: (vaultId, folder, subtopic) => call('notes:delete')({ vaultId, folder, subtopic }),
+    undoRegenerate: (vaultId, folder, subtopic) => call('notes:undoRegenerate')({ vaultId, folder, subtopic }),
+  },
+  trash: {
+    list: (vaultId) => call('trash:list')({ vaultId }),
+    restore: (vaultId, id) => call('trash:restore')({ vaultId, id }),
+    purge: (vaultId, id) => call('trash:purge')({ vaultId, ...(id ? { id } : {}) }),
   },
   link: {
     open: (url) => call('link:open')({ url }),
@@ -42,13 +58,15 @@ const api: LodeApi = {
     clear: (id) => call('keys:clear')({ id }),
   },
   generate: {
-    preview: (vaultId, folder) => call('generate:preview')({ vaultId, folder }),
-    run: (vaultId, folder) => call('generate:run')({ vaultId, folder }),
-    cancel: (vaultId, folder) => call('generate:cancel')({ vaultId, folder }),
-    onProgress: (cb) => {
-      const listener = (_e: Electron.IpcRendererEvent, payload: Parameters<typeof cb>[0]): void => cb(payload);
-      ipcRenderer.on('generate:progress', listener);
-      return () => ipcRenderer.removeListener('generate:progress', listener);
+    preview: (vaultId, folder, subtopic) => call('generate:preview')({ vaultId, folder, ...(subtopic ? { subtopic } : {}) }),
+    enqueue: (vaultId, folder, subtopic) => call('generate:enqueue')({ vaultId, folder, ...(subtopic ? { subtopic } : {}) }),
+    jobs: () => call('generate:jobs')(),
+    cancel: (jobId) => call('generate:cancel')({ jobId }),
+    dismiss: (jobId) => call('generate:dismiss')({ jobId }),
+    onJobs: (cb) => {
+      const listener = (_e: Electron.IpcRendererEvent, jobs: Parameters<typeof cb>[0]): void => cb(jobs);
+      ipcRenderer.on('generate:jobs', listener);
+      return () => ipcRenderer.removeListener('generate:jobs', listener);
     },
   },
 };

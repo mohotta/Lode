@@ -1,23 +1,59 @@
+import { useState } from 'react';
 import type { ResolvedBlock } from '@shared/types';
 import { lode } from '../api';
 import { shortDate } from '../dates';
-import { LinkIcon, PersonIcon, SparkIcon, WarnIcon } from './Icons';
+import { CopyIcon, DotsIcon, LinkIcon, PencilIcon, PersonIcon, SparkIcon, TrashIcon, UndoIcon, WarnIcon } from './Icons';
 import { Markdown } from './Markdown';
+import { Menu } from './Menu';
+import { PointEditor } from './PointEditor';
 
 type PointB = Extract<ResolvedBlock, { kind: 'point' }>;
 type LlmB = Extract<ResolvedBlock, { kind: 'llm' }>;
+
+interface PointActions {
+  onJump(id: string): void;
+  onEdit(id: string, text: string): Promise<boolean>;
+  onSetDeleted(id: string, deleted: boolean): Promise<void>;
+}
 
 /**
  * The user's own point, rendered from backlog text. A callout with accent border,
  * tint, person icon and a "You" label, so it never relies on colour alone (FR-23).
  */
-export function PointBlock({ block, onJump }: { block: PointB; onJump(id: string): void }): React.JSX.Element {
+export function PointBlock({ block, ...a }: { block: PointB } & PointActions): React.JSX.Element {
+  const [editing, setEditing] = useState(false);
   if (block.missing || block.deleted) {
     return (
       <div className="point-block removed" role="note" aria-label="Removed point">
         <WarnIcon size={14} />
         <span>{block.missing ? 'This point is no longer in the backlog' : 'You removed this point'}</span>
+        {block.deleted && (
+          <button className="btn small-btn" onClick={() => void a.onSetDeleted(block.id, false)}>
+            <UndoIcon size={13} /> Restore
+          </button>
+        )}
       </div>
+    );
+  }
+  if (block.duplicateOf) {
+    const of = block.duplicateOf;
+    return (
+      <article className="point-block repeat" aria-label={`Your point from ${shortDate(block.date)}, a repeat`}>
+        <header className="point-head">
+          <span className="badge you">
+            <PersonIcon size={12} /> You
+          </span>
+          <span className="badge repeat-badge">
+            <CopyIcon size={12} /> Repeat of {of.date ? shortDate(of.date) : 'an earlier point'}
+          </span>
+          <button className="point-date" onClick={() => a.onJump(block.id)} title="Show in backlog">
+            {shortDate(block.date)}
+          </button>
+        </header>
+        <div className="point-body user-md">
+          <Markdown text={block.text} keepBreaks />
+        </div>
+      </article>
     );
   }
   return (
@@ -34,14 +70,37 @@ export function PointBlock({ block, onJump }: { block: PointB; onJump(id: string
             <WarnIcon size={12} /> Needs a fix
           </span>
         )}
-        <button className="point-date" onClick={() => onJump(block.id)} title="Show in backlog">
+        <button className="point-date" onClick={() => a.onJump(block.id)} title="Show in backlog">
           {shortDate(block.date)}
         </button>
+        {!editing && (
+          <span className="point-block-actions">
+            <Menu
+              label="Point actions"
+              trigger={<DotsIcon size={14} />}
+              align="end"
+              items={[
+                { label: 'Edit', icon: <PencilIcon size={14} />, onSelect: () => setEditing(true) },
+                'separator',
+                {
+                  label: 'Delete',
+                  icon: <TrashIcon size={14} />,
+                  danger: true,
+                  onSelect: () => void a.onSetDeleted(block.id, true),
+                },
+              ]}
+            />
+          </span>
+        )}
       </header>
-      {/* Exactly the backlog text; markdown is only how it is displayed. */}
-      <div className="point-body user-md">
-        <Markdown text={block.text} keepBreaks />
-      </div>
+      {editing ? (
+        <PointEditor initial={block.text} onSave={(t) => a.onEdit(block.id, t)} onCancel={() => setEditing(false)} />
+      ) : (
+        /* Exactly the backlog text; markdown is only how it is displayed. */
+        <div className="point-body user-md">
+          <Markdown text={block.text} keepBreaks />
+        </div>
+      )}
     </article>
   );
 }
@@ -86,8 +145,10 @@ function Sources({ block }: { block: LlmB }): React.JSX.Element | null {
 }
 
 /** Generated content: reads as quiet body text, with an AI badge, dotted rule and source pills. */
-export function LlmBlock({ block }: { block: LlmB }): React.JSX.Element {
+export function LlmBlock({ block }: { block: LlmB }): React.JSX.Element | null {
   if (block.correctionFor) return <CorrectionBlock block={block} />;
+  // A repeat marker carries no prose; the point above already shows "Repeat of …".
+  if (block.duplicate) return null;
   return (
     <article className="llm-block" aria-label="AI-generated explanation">
       <header className="llm-head">

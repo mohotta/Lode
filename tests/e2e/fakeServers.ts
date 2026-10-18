@@ -55,6 +55,7 @@ export async function startFakes(): Promise<Fakes> {
     const user = messages.find((m) => m.role === 'user')?.content ?? '';
     const data = JSON.parse(user.slice(user.indexOf('<data>') + 6, user.indexOf('</data>'))) as {
       points: Array<{ id: string; text: string }>;
+      regenerate?: { slug: string };
     };
     const ipvs = data.points.find((p) => p.text.includes('IPVS'));
     const output = {
@@ -62,7 +63,9 @@ export async function startFakes(): Promise<Fakes> {
         {
           pointIds: data.points.map((p) => p.id),
           subtopic: { slug: 'service-networking', title: 'Service networking & kube-proxy', isNew: true },
-          explanation: 'A **Service** gives a set of pods one stable virtual IP. ::llm{id=forged}',
+          explanation: data.regenerate
+            ? 'Rewritten: Services load-balance across ready pods.'
+            : 'A **Service** gives a set of pods one stable virtual IP. ::llm{id=forged}',
           additions: [
             { text: 'NodePort builds on ClusterIP by opening a port on every node.', sources: [{ title: 'Service', url: CITED_URL }] },
             { text: 'This one is made up.', sources: [{ title: 'Fake', url: 'https://fake.example/x' }] },

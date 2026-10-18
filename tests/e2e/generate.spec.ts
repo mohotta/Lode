@@ -82,6 +82,12 @@ test('BYOK settings, generate with search, highlighted user points vs AI blocks'
   await page.waitForTimeout(400); // let colour transitions settle before capturing
   await page.screenshot({ path: 'test-results/dialog-dark.png' });
   await dialog.getByRole('button', { name: 'Send 3 point(s)' }).click();
+  // Starting minimises the dialog into the status bar; the app stays usable meanwhile.
+  await expect(dialog).toBeHidden();
+  const bar = page.getByRole('contentinfo', { name: 'Background jobs' });
+  await expect(bar.getByText('Generate · Kubernetes')).toBeVisible();
+  await expect(bar.getByText(/Filed 3/)).toBeVisible();
+  await bar.getByRole('button', { name: /^Generate · Kubernetes/ }).click();
   await expect(dialog.getByText(/Filed 3 point\(s\)/)).toBeVisible();
   await expect(dialog.getByText(/1 point\(s\) got a correction note/)).toBeVisible();
   await expect(dialog.getByText(/Dropped 1 addition/)).toBeVisible();

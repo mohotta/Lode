@@ -137,7 +137,7 @@ export class OpenAiCompatibleAdapter implements LlmAdapter {
   async generate(input: GenerationInput, opts: GenerateOptions): Promise<GenerateResult> {
     const useSearch = opts.useSearch && !!this.o.search;
     const messages: Message[] = [
-      { role: 'system', content: systemPrompt({ useSearch, maxSearches: opts.maxSearches }) },
+      { role: 'system', content: systemPrompt({ useSearch, maxSearches: opts.maxSearches, regenerate: !!input.regenerate }) },
       { role: 'user', content: userPrompt(input) },
     ];
     const searchResults: SearchResult[] = [];

@@ -110,3 +110,65 @@ export function appendEntry(existing: string | null, date: string, entry: Backlo
   const sep = base === '' || base.endsWith('\n') ? '' : '\n';
   return base + sep + serialiseEntry(entry);
 }
+
+interface EntrySpan {
+  id: PointId;
+  /** Body line index of the entry's first line. */
+  start: number;
+  /** Body line index just past the entry's last line. */
+  end: number;
+}
+
+/** Line spans of every ID-carrying entry in a backlog body (same rules as `parseBacklog`). */
+function entrySpans(lines: readonly string[]): EntrySpan[] {
+  const spans: EntrySpan[] = [];
+  let start = -1;
+  const flush = (end: number): void => {
+    if (start === -1) return;
+    const m = ID_SUFFIX_RE.exec(lines[end - 1] ?? '');
+    if (m && m[1] && isPointId(m[1])) spans.push({ id: m[1], start, end });
+    start = -1;
+  };
+  lines.forEach((line, i) => {
+    if (line.startsWith('- ')) {
+      flush(i);
+      start = i;
+    } else if (start !== -1 && !line.startsWith('  ')) {
+      flush(i);
+    }
+  });
+  flush(lines.length);
+  return spans;
+}
+
+function splitHead(content: string): { head: string; body: string } {
+  const { body } = splitFrontmatter(content);
+  return { head: content.slice(0, content.length - body.length), body };
+}
+
+/**
+ * User-initiated edit (`backlog:edit`): replaces one entry's lines with the new text.
+ * The ID and every other byte of the file stay as they were.
+ */
+export function replaceEntryText(content: string, id: PointId, text: string): string {
+  const { head, body } = splitHead(content);
+  const lines = body.split('\n');
+  const span = entrySpans(lines).find((s) => s.id === id);
+  if (!span) throw new Error('Point not found in this day file');
+  lines.splice(span.start, span.end - span.start, ...serialiseEntry({ id, text }).slice(0, -1).split('\n'));
+  return head + lines.join('\n');
+}
+
+/**
+ * User-initiated soft delete or restore (`backlog:softDelete`): only the frontmatter
+ * `deleted` list changes. The point's text is kept so the delete can be undone.
+ */
+export function setTombstone(content: string, date: string, id: PointId, deleted: boolean): string {
+  const split = splitFrontmatter(content);
+  const current = Array.isArray(split.data.deleted)
+    ? split.data.deleted.filter((v): v is PointId => typeof v === 'string' && isPointId(v))
+    : [];
+  const next = deleted ? [...new Set([...current, id])] : current.filter((x) => x !== id);
+  const data = split.hasFrontmatter ? { ...split.data, deleted: next } : { date, deleted: next };
+  return renderFrontmatter(data) + split.body;
+}

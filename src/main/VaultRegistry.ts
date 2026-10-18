@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import type { VaultInfo } from '@shared/types';
 import { BacklogRepo } from '@core/repos/BacklogRepo';
 import { NoteRepo } from '@core/repos/NoteRepo';
+import { TrashRepo } from '@core/repos/TrashRepo';
 import { Vault } from '@core/repos/Vault';
 import { VaultService } from '@core/repos/VaultService';
 import type { SettingsStore } from './SettingsStore';
@@ -13,6 +14,7 @@ export interface OpenVault {
   service: VaultService;
   backlog: BacklogRepo;
   notes: NoteRepo;
+  trash: TrashRepo;
 }
 
 export function vaultIdFor(path: string): string {
@@ -65,7 +67,14 @@ export class VaultRegistry {
     const vault = new Vault(info.path);
     const service = new VaultService(vault);
     await service.init();
-    const opened: OpenVault = { info, vault, service, backlog: new BacklogRepo(vault), notes: new NoteRepo(vault) };
+    const opened: OpenVault = {
+      info,
+      vault,
+      service,
+      backlog: new BacklogRepo(vault),
+      notes: new NoteRepo(vault),
+      trash: new TrashRepo(vault),
+    };
     this.open.set(id, opened);
     await this.settings.update((s) => ({ ...s, lastVaultId: id }));
     return opened;

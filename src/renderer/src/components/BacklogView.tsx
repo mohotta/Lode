@@ -1,17 +1,26 @@
+import { useState } from 'react';
 import type { BacklogDay, SubtopicInfo } from '@shared/types';
-import { dayLabel } from '../dates';
-import { WarnIcon } from './Icons';
+import { dayLabel, shortDate } from '../dates';
+import { CopyIcon, DotsIcon, PencilIcon, TrashIcon, UndoIcon, WarnIcon } from './Icons';
 import { Markdown } from './Markdown';
+import { Menu } from './Menu';
+import { PointEditor } from './PointEditor';
 
 interface Props {
   days: BacklogDay[];
   subtopics: SubtopicInfo[];
   highlightId: string | null;
   onOpenSubtopic(slug: string): void;
+  onJumpToPoint(id: string): void;
+  onEdit(id: string, text: string): Promise<boolean>;
+  onSetDeleted(id: string, deleted: boolean): Promise<void>;
 }
 
-export function BacklogView({ days, subtopics, highlightId, onOpenSubtopic }: Props): React.JSX.Element {
+export function BacklogView(p: Props): React.JSX.Element {
+  const { days, subtopics, highlightId, onOpenSubtopic } = p;
+  const [editing, setEditing] = useState<string | null>(null);
   const titleOf = (slug: string): string => subtopics.find((s) => s.slug === slug)?.title ?? slug;
+  const dateOf = (id: string): string => days.flatMap((d) => d.points).find((pt) => pt.id === id)?.date ?? '';
   if (days.length === 0) {
     return (
       <div className="empty-state small-pad">
@@ -26,39 +35,83 @@ export function BacklogView({ days, subtopics, highlightId, onOpenSubtopic }: Pr
         <section key={day.date} className="day" aria-labelledby={`day-${day.date}`}>
           <h3 id={`day-${day.date}`} className="day-heading">
             {dayLabel(day.date)}
-            <span className="day-count">{day.points.length}</span>
+            <span className="day-count">{day.points.filter((pt) => !pt.deleted).length}</span>
           </h3>
           <ul className="points" role="list">
-            {day.points.map((p) => {
-              const filed = p.filedUnder.length > 0;
+            {day.points.map((pt) => {
+              const filed = pt.filedUnder.length > 0;
               return (
                 <li
-                  key={p.id}
-                  id={`point-${p.id}`}
-                  className={`point-row ${p.deleted ? 'deleted' : ''} ${highlightId === p.id ? 'flash' : ''}`}
+                  key={pt.id}
+                  id={`point-${pt.id}`}
+                  className={`point-row ${pt.deleted ? 'deleted' : ''} ${highlightId === pt.id ? 'flash' : ''}`}
                 >
                   <span className={`status-dot ${filed ? 'filed' : 'unfiled'}`} aria-hidden="true" />
                   <div className="point-main">
-                    <div className="point-text user-md">
-                      <Markdown text={p.text} keepBreaks />
-                    </div>
-                    <div className="point-meta">
-                      {filed ? (
-                        p.filedUnder.map((s) => (
-                          <button key={s} className="tag" onClick={() => onOpenSubtopic(s)} title={`Open ${titleOf(s)}`}>
-                            {titleOf(s)}
-                          </button>
-                        ))
-                      ) : (
-                        <span className="tag muted-tag">unfiled</span>
-                      )}
-                      {p.corrected && (
-                        <span className="tag fix-tag" title="An AI correction note was added for this point">
-                          <WarnIcon size={11} /> needs a fix
-                        </span>
-                      )}
-                    </div>
+                    {editing === pt.id ? (
+                      <PointEditor
+                        initial={pt.text}
+                        onSave={(text) => p.onEdit(pt.id, text)}
+                        onCancel={() => setEditing(null)}
+                      />
+                    ) : (
+                      <>
+                        <div className="point-text user-md">
+                          <Markdown text={pt.text} keepBreaks />
+                        </div>
+                        <div className="point-meta">
+                          {pt.deleted ? (
+                            <span className="tag muted-tag">deleted</span>
+                          ) : filed ? (
+                            pt.filedUnder.map((s) => (
+                              <button key={s} className="tag" onClick={() => onOpenSubtopic(s)} title={`Open ${titleOf(s)}`}>
+                                {titleOf(s)}
+                              </button>
+                            ))
+                          ) : (
+                            <span className="tag muted-tag">unfiled</span>
+                          )}
+                          {pt.corrected && !pt.deleted && (
+                            <span className="tag fix-tag" title="An AI correction note was added for this point">
+                              <WarnIcon size={11} /> needs a fix
+                            </span>
+                          )}
+                          {pt.duplicateOf && !pt.deleted && (
+                            <button
+                              className="tag dup-tag"
+                              title="Generate found this repeats an earlier point. Show it."
+                              onClick={() => pt.duplicateOf && p.onJumpToPoint(pt.duplicateOf)}
+                            >
+                              <CopyIcon size={11} /> repeat of {shortDate(dateOf(pt.duplicateOf)) || 'an earlier point'}
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
+                  {editing !== pt.id && (
+                    <span className="row-actions point-actions">
+                      <Menu
+                        label="Point actions"
+                        trigger={<DotsIcon size={15} />}
+                        align="end"
+                        items={
+                          pt.deleted
+                            ? [{ label: 'Restore', icon: <UndoIcon size={14} />, onSelect: () => void p.onSetDeleted(pt.id, false) }]
+                            : [
+                                { label: 'Edit', icon: <PencilIcon size={14} />, onSelect: () => setEditing(pt.id) },
+                                'separator',
+                                {
+                                  label: 'Delete',
+                                  icon: <TrashIcon size={14} />,
+                                  danger: true,
+                                  onSelect: () => void p.onSetDeleted(pt.id, true),
+                                },
+                              ]
+                        }
+                      />
+                    </span>
+                  )}
                 </li>
               );
             })}
