@@ -47,7 +47,7 @@ describe('SearchIndex', () => {
       join(root, 'kubernetes', 'notes', 'svc.md'),
       note(
         'Services',
-        `{{point:${p.id}}}\n\n::llm{id=b-1 model="m" at="x"}\nA Service load-balances across pods. [Docs](https://kubernetes.io/x)\n::\n\n` +
+        `{{point:${p.id}}}\n\n::llm{id=b-1 model="m" at="x"}\nA **Service** load-balances across \`pods\`. [Docs](https://kubernetes.io/x)\n::\n\n` +
           `::llm{id=b-2 kind=correction for=${p.id} model="m" at="x"}\nServices are also reachable via NodePort.\n::`,
       ),
     );
@@ -63,6 +63,7 @@ describe('SearchIndex', () => {
     expect(ai.some((h) => h.kind === 'ai' && h.correction)).toBe(true);
     expect(hits[0]!.snippet).toContain('\u0001');
     expect(hits.some((h) => h.snippet.includes('https://'))).toBe(false); // link URLs are not indexed
+    expect(hits.some((h) => /\*\*|`/.test(h.snippet))).toBe(false); // nor markdown marks
     expect(await index.query('vacuum tuples')).toEqual([expect.objectContaining({ kind: 'point', folder: 'postgres' })]);
     expect(await hashBacklogs(root)).toEqual(hashes);
   });

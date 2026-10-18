@@ -16,7 +16,7 @@ import { LODE_DIR, Vault } from '../repos/Vault';
  * Lode are picked up without a file watcher. Deleting the file just triggers a rebuild.
  */
 
-const SCHEMA_VERSION = '1';
+const SCHEMA_VERSION = '2';
 
 type Kind = 'point' | 'ai' | 'correction';
 
@@ -34,6 +34,11 @@ interface Row {
 }
 
 const LINK_RE = /\[([^\]\n]*)\]\((?:https?:\/\/[^\s)]+)\)/g;
+
+/** Indexed text is for matching and snippets only, so markdown emphasis and code marks are dropped. */
+function plain(md: string): string {
+  return md.replace(LINK_RE, '$1').replace(/\*\*|__|`+/g, '');
+}
 
 /** Turns a user query into a safe FTS5 expression: every word, as a quoted prefix, AND-ed. */
 export function toFtsQuery(q: string): string | null {
@@ -127,7 +132,7 @@ export class SearchIndex {
         date: day.date,
         extra: deleted.has(e.id) ? '1' : '',
         digest: 0,
-        text: e.text,
+        text: plain(e.text),
       }));
     }
     const note = parseNote(content, { folder, subtopic: base });
@@ -142,7 +147,7 @@ export class SearchIndex {
         date: '',
         extra: note.meta.title,
         digest: area === 'digests' ? 1 : 0,
-        text: b.body.replace(LINK_RE, '$1'),
+        text: plain(b.body),
       });
     }
     return rows;
