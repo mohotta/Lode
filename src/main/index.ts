@@ -26,7 +26,7 @@ function createWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 560,
     show: false,
-    title: 'Lode',
+    title: 'Lode — Mine what you learn',
     backgroundColor: '#16181d',
     autoHideMenuBar: true,
     webPreferences: {
