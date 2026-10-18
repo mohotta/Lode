@@ -156,7 +156,11 @@ export const Scratchpad = forwardRef<HTMLTextAreaElement, Props>(function Scratc
             }}
           />
         </div>
-        {picked && <span className="composer-note">New points go to {shortDate(picked)}</span>}
+        {picked && (
+          <span className="composer-note" title={`New points go to ${shortDate(picked)}`}>
+            New points go to {shortDate(picked)}
+          </span>
+        )}
         <span className="composer-md-hint">
           Markdown · <code>```</code> for code · <kbd>Shift</kbd>+<kbd>↵</kbd> new line
         </span>

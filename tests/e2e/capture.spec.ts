@@ -94,3 +94,42 @@ test('backfill a point to an earlier day with the composer date picker', async (
   await expect(backlog.getByRole('heading', { name: /Today/ })).toBeVisible();
   expect((await readdir(join(vaultRoot, 'postgres', 'backlog'))).sort()).toHaveLength(2);
 });
+
+test('sidebar and backlog panes resize by drag and keyboard, and remember their width', async () => {
+  const { page } = l;
+  await page.getByRole('button', { name: 'New folder', exact: true }).first().click();
+  await page.getByRole('textbox', { name: 'New folder name' }).fill('Kubernetes');
+  await page.keyboard.press('Enter');
+  const sidebar = page.getByRole('navigation', { name: 'Vaults and folders' });
+  const backlog = page.getByRole('main', { name: 'Scratchpad and backlog' });
+  const width = async (loc: typeof sidebar): Promise<number> => (await loc.boundingBox())?.width ?? 0;
+  const before = await width(sidebar);
+
+  // Drag the sidebar's edge 80px to the right.
+  const handle = page.getByRole('separator', { name: 'Resize sidebar' });
+  const box = (await handle.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 80, box.y + 200, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(() => width(sidebar)).toBeGreaterThan(before + 70);
+
+  // Keyboard: arrows resize the backlog pane, Home resets it.
+  const list = page.getByRole('separator', { name: 'Resize backlog' });
+  const listBefore = await width(backlog);
+  await list.focus();
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => width(backlog)).toBeLessThan(listBefore - 20);
+  await page.keyboard.press('Home');
+  await expect.poll(() => width(backlog)).toBeCloseTo(listBefore, -1);
+
+  // Double-click resets the sidebar; widths survive a reload.
+  await handle.dblclick();
+  await expect.poll(() => width(sidebar)).toBeCloseTo(before, -1);
+  await list.focus();
+  await page.keyboard.press('ArrowRight');
+  const kept = await width(backlog);
+  await page.reload();
+  await expect.poll(() => width(page.getByRole('main', { name: 'Scratchpad and backlog' }))).toBeCloseTo(kept, -1);
+});
