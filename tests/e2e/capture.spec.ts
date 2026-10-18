@@ -16,6 +16,7 @@ test.afterEach(async () => {
 
 test('create folder, add points, see them in the backlog and on disk', async () => {
   const { page, vaultRoot } = l;
+  await expect(page).toHaveTitle('Lode — Mine what you learn');
   await page.getByRole('button', { name: 'New folder', exact: true }).first().click();
   await page.getByRole('textbox', { name: 'New folder name' }).fill('Kubernetes');
   await page.keyboard.press('Enter');
