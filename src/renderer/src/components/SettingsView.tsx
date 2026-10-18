@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { KeyIdName, SettingsView as SV } from '@shared/ipc';
 import { lode, unwrap } from '../api';
 import { WarnIcon } from './Icons';
@@ -88,9 +88,15 @@ export function SettingsView({ onClose }: Props): React.JSX.Element {
   const [model, setModel] = useState('');
   const [saved, setSaved] = useState(false);
 
+  // Reloads and saves can overlap (a key save reloads settings while the user toggles one);
+  // only the most recent request may update the view, so a stale reply never undoes a change.
+  const seq = useRef(0);
+
   const load = async (): Promise<void> => {
+    const n = ++seq.current;
     try {
       const v = await unwrap(lode.settings.get());
+      if (n !== seq.current) return;
       setS(v);
       return void 0;
     } catch (e) {
@@ -115,9 +121,11 @@ export function SettingsView({ onClose }: Props): React.JSX.Element {
   }, []);
 
   const patch = async (p: Parameters<typeof lode.settings.set>[0]): Promise<void> => {
+    const n = ++seq.current;
     try {
       setError(null);
-      setS(await unwrap(lode.settings.set(p)));
+      const v = await unwrap(lode.settings.set(p));
+      if (n === seq.current) setS(v);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }

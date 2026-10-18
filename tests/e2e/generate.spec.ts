@@ -37,7 +37,8 @@ test('BYOK settings, generate with search, highlighted user points vs AI blocks'
   const llmKey = page.getByLabel('LLM API key API key');
   await llmKey.fill(LLM_KEY);
   await page.getByRole('group', { name: 'LLM API key' }).getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText('Saved to secure storage')).toBeVisible();
+  // Asserting on the status line means a failure reports the actual message (e.g. a refusal).
+  await expect(page.getByRole('group', { name: 'LLM API key' }).getByRole('status')).toHaveText('Saved to secure storage');
   await page.getByRole('group', { name: 'LLM API key' }).getByRole('button', { name: 'Test connection' }).click();
   await expect(page.getByText('Connection OK')).toBeVisible();
   await page.getByLabel('Tavily search key API key').fill('tvly-e2e-fake');
