@@ -8,3 +8,4 @@ playwright-report/
 *.tsbuildinfo
 .pnpm-store/
 .cache/
+release.env

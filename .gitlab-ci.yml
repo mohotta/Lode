@@ -1,7 +1,12 @@
 # Lode CI (HLD §13). Checks run on every push and merge request; tagged releases build packages.
 # Windows and macOS builds need GitLab's hosted Windows/macOS runners, so they are manual jobs.
+#
+# Releasing: bump "version" in package.json, commit, then push a matching tag, e.g.
+#   git tag v0.1.0 && git push origin v0.1.0
+# The Linux packages go to the Generic Package Registry (they don't expire like artifacts)
+# and a GitLab Release is created that links to them.
 
-stages: [check, e2e, package]
+stages: [check, e2e, package, release]
 
 default:
   image: node:24-bookworm
@@ -59,15 +64,30 @@ package:linux:
   script:
     - *electron-deps
     - apt-get install -y -qq --no-install-recommends rpm > /dev/null
+    # A release tag must match package.json, which names the files.
+    - VERSION=$(node -p "require('./package.json').version")
+    - if [ -n "$CI_COMMIT_TAG" ] && [ "$CI_COMMIT_TAG" != "v$VERSION" ]; then echo "Tag $CI_COMMIT_TAG does not match package.json version $VERSION"; exit 1; fi
+    - echo "VERSION=$VERSION" > release.env
     - pnpm package
     # Smoke-test the packaged build, not just the dev bundle.
     - LODE_E2E_EXECUTABLE=dist/linux-unpacked/lode xvfb-run -a pnpm exec playwright test tests/e2e/capture.spec.ts
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        for f in dist/*.AppImage dist/*.deb dist/*.rpm; do
+          curl --fail --silent --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$f" \
+            "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/lode/$VERSION/$(basename "$f")"
+          echo " uploaded $(basename "$f")"
+        done
+      fi
   artifacts:
     expire_in: 30 days
     paths:
       - dist/*.AppImage
       - dist/*.deb
       - dist/*.rpm
+    reports:
+      # Hands VERSION to the release job.
+      dotenv: release.env
 
 package:windows:
   stage: package
@@ -110,3 +130,38 @@ package:macos:
   artifacts:
     expire_in: 30 days
     paths: [dist/*.dmg]
+
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  needs:
+    - job: package:linux
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - echo "Creating release $CI_COMMIT_TAG for version $VERSION"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: Lode $CI_COMMIT_TAG
+    description: |
+      Linux packages for Lode $CI_COMMIT_TAG (unsigned).
+
+      - **AppImage**: download, `chmod +x`, run. Works on most distributions.
+      - **deb** (Debian/Ubuntu): `sudo apt install ./lode_${VERSION}_amd64.deb`
+      - **rpm** (Fedora/openSUSE): `sudo dnf install ./lode-${VERSION}.x86_64.rpm`
+
+      Bring your own LLM key (Settings). Your notes stay in the vault folder you choose.
+    assets:
+      links:
+        - name: Lode-${VERSION}-x86_64.AppImage
+          url: $CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/lode/${VERSION}/Lode-${VERSION}-x86_64.AppImage
+          link_type: package
+        - name: lode_${VERSION}_amd64.deb
+          url: $CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/lode/${VERSION}/lode_${VERSION}_amd64.deb
+          link_type: package
+        - name: lode-${VERSION}.x86_64.rpm
+          url: $CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/lode/${VERSION}/lode-${VERSION}.x86_64.rpm
+          link_type: package
