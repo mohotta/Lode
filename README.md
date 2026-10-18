@@ -60,22 +60,22 @@ Windows and macOS installers can be built from source (see [Packaging](#packagin
 
 1. **Open or create a vault.** Pick any directory. Lode keeps it as plain markdown you can open in any editor.
 2. **Create a folder** (for example "Kubernetes") and type what you learned. Enter adds a point; Shift+Enter starts a new line.
-3. **Settings.** Enter an OpenAI-compatible base URL and model, then save your LLM key. Optionally add a [Tavily](https://tavily.com) key so the model can search the web and cite sources.
+3. **Settings.** Enter an OpenAI-compatible base URL and model, then save your LLM key ([OpenRouter](guides/openrouter.md) or [Groq](guides/groq.md) guide). Optionally add a [Tavily key](guides/tavily.md) so the model can search the web and cite sources.
 4. **Generate.** Check the preview (points, model, token estimate, search on or off) and confirm. Follow the job in the status bar and click it for the report.
 
 ### LLM providers
 
-Lode talks to any **OpenAI-compatible Chat Completions** endpoint, so one setting covers many providers:
+> **Lode uses the OpenAI API format** (Chat Completions with tool calling). Any provider with an OpenAI-compatible endpoint works: set its base URL, model ID and key in Settings.
 
-| Provider | Base URL |
-|---|---|
-| OpenAI | `https://api.openai.com/v1` |
-| OpenRouter | `https://openrouter.ai/api/v1` |
-| Groq | `https://api.groq.com/openai/v1` |
-| Ollama (local) | `http://localhost:11434/v1` |
-| LiteLLM, vLLM, LM Studio and other gateways | your gateway's `/v1` URL |
+| Provider | Base URL | Key guide |
+|---|---|---|
+| OpenRouter (hundreds of models, one key) | `https://openrouter.ai/api/v1` | [guides/openrouter.md](guides/openrouter.md) |
+| Groq (fast open models, free tier) | `https://api.groq.com/openai/v1` | [guides/groq.md](guides/groq.md) |
+| OpenAI | `https://api.openai.com/v1` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| Ollama (local, no key) | `http://localhost:11434/v1` | |
+| LiteLLM, vLLM, LM Studio and other gateways | your gateway's `/v1` URL | |
 
-The model must support tool calling for web search. Native Anthropic, OpenAI and Gemini adapters are on the roadmap.
+For web search, the model must support tool calling and you need a Tavily key: see [guides/tavily.md](guides/tavily.md). Native Anthropic and Gemini adapters are on the roadmap.
 
 ## Privacy and your data
 
@@ -176,6 +176,7 @@ Releases are cut by CI from version tags:
 ## Roadmap
 
 - Native Anthropic, OpenAI and Gemini adapters, and a separate model for digests
+- More web search providers besides Tavily (such as Brave Search, Exa, SearXNG for self-hosting) and providers' built-in search tools
 - Watching the vault for edits made in other editors
 - Moving a point between subtopics by hand
 - Signed Windows and macOS builds, Flatpak
