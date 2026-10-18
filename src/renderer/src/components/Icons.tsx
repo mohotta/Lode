@@ -206,3 +206,24 @@ export const MinimizeIcon = (p: P): React.JSX.Element => (
     <path d="M3.5 12.5h9" />
   </Svg>
 );
+
+export const ReviewIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M2.5 8a5.5 5.5 0 109.6-3.7" />
+    <path d="M12.5 2.5v2.3h-2.3M8 5v3.2l2 1.3" />
+  </Svg>
+);
+
+export const SearchIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <circle cx="7" cy="7" r="4.5" />
+    <path d="M10.5 10.5l3 3" />
+  </Svg>
+);
+
+export const DigestIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+    <path d="M5 6h6M5 8.5h6M5 11h3.5" />
+  </Svg>
+);

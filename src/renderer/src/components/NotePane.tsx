@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { JobView } from '@shared/ipc';
-import type { ResolvedNote, SubtopicInfo } from '@shared/types';
+import type { DigestInfo, ResolvedNote, SubtopicInfo } from '@shared/types';
 import { lode, unwrap } from '../api';
 import { LlmBlock, PointBlock, RawBlock } from './Blocks';
 import {
@@ -9,7 +9,10 @@ import {
   ChevronRightIcon,
   DotsIcon,
   HashIcon,
+  DigestIcon,
   NoteIcon,
+  PersonIcon,
+  PlusIcon,
   RefreshIcon,
   TrashIcon,
   UndoIcon,
@@ -39,6 +42,24 @@ interface Props {
   onDelete(slug: string, title: string): void;
   onEditPoint(id: string, text: string): Promise<boolean>;
   onSetPointDeleted(id: string, deleted: boolean): Promise<void>;
+  digests: DigestInfo[];
+  onNewDigest(): void;
+  onRegenerateDigest(id: string, title: string): void;
+  onDeleteDigest(id: string, title: string): void;
+}
+
+/** Notes and digests share the pane; a digest is addressed as `digest:<period>`. */
+export const DIGEST_PREFIX = 'digest:';
+
+const MINE_ONLY_KEY = 'lode.mineOnly';
+
+/** Per-device convenience: remembers the My points only toggle. */
+function loadMineOnly(): boolean {
+  try {
+    return localStorage.getItem(MINE_ONLY_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 function relative(iso: string): string {
@@ -55,11 +76,24 @@ function relative(iso: string): string {
 export function NotePane(p: Props): React.JSX.Element {
   const { vaultId, folder, active, version, onError } = p;
   const [note, setNote] = useState<ResolvedNote | null>(null);
+  const [mineOnly, setMineOnly] = useState<boolean>(loadMineOnly);
+  const toggleMineOnly = (): void => {
+    const next = !mineOnly;
+    setMineOnly(next);
+    try {
+      localStorage.setItem(MINE_ONLY_KEY, next ? '1' : '0');
+    } catch {
+      // Storage unavailable: the toggle just won't persist.
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
     if (!vaultId || !folder || !active) return;
-    unwrap(lode.notes.read(vaultId, folder, active)).then(
+    const read = active.startsWith(DIGEST_PREFIX)
+      ? lode.digest.read(vaultId, folder, active.slice(DIGEST_PREFIX.length))
+      : lode.notes.read(vaultId, folder, active);
+    unwrap(read).then(
       (n) => !cancelled && setNote(n),
       (e: unknown) => !cancelled && onError(e instanceof Error ? e.message : String(e)),
     );
@@ -68,7 +102,9 @@ export function NotePane(p: Props): React.JSX.Element {
     };
   }, [vaultId, folder, active, version, onError]);
 
-  const shown = note && active && note.slug === active && note.folder === folder ? note : null;
+  const isDigest = !!active?.startsWith(DIGEST_PREFIX);
+  const activeSlug = isDigest && active ? active.slice(DIGEST_PREFIX.length) : active;
+  const shown = note && activeSlug && note.slug === activeSlug && note.folder === folder ? note : null;
   const mine = shown?.blocks.filter((b) => b.kind === 'point').length ?? 0;
   const ai = shown?.blocks.filter((b) => b.kind === 'llm' && !b.duplicate).length ?? 0;
 
@@ -112,16 +148,26 @@ export function NotePane(p: Props): React.JSX.Element {
         </div>
         {shown && (
           <div className="note-actions">
+            <button
+              className={`btn toggle ${mineOnly ? 'on' : ''}`}
+              aria-pressed={mineOnly}
+              onClick={toggleMineOnly}
+              title="Hide AI sections and show only your own points"
+            >
+              <PersonIcon size={14} /> My points
+            </button>
             {p.regenJob ? (
               <button className="btn" onClick={() => p.regenJob && p.onOpenJob(p.regenJob.id)}>
                 <span className="spinner small" aria-hidden="true" />
-                {p.regenJob.status === 'queued' ? 'Queued' : 'Regenerating…'}
+                {p.regenJob.status === 'queued' ? 'Queued' : isDigest ? 'Writing…' : 'Regenerating…'}
               </button>
             ) : (
               <button
                 className="btn"
-                onClick={() => p.onRegenerate(shown.slug, shown.title)}
-                title="Rewrite this note's AI sections from all of its points"
+                onClick={() =>
+                  isDigest ? p.onRegenerateDigest(shown.slug, shown.title) : p.onRegenerate(shown.slug, shown.title)
+                }
+                title={isDigest ? 'Write this digest again' : "Rewrite this note's AI sections from all of its points"}
               >
                 <RefreshIcon size={14} /> Regenerate
               </button>
@@ -130,7 +176,14 @@ export function NotePane(p: Props): React.JSX.Element {
               label="Note actions"
               trigger={<DotsIcon size={15} />}
               align="end"
-              items={[
+              items={isDigest ? [
+                {
+                  label: 'Delete digest',
+                  icon: <TrashIcon size={14} />,
+                  danger: true,
+                  onSelect: () => p.onDeleteDigest(shown.slug, shown.title),
+                },
+              ] : [
                 ...(shown.canUndo
                   ? [
                       {
@@ -160,11 +213,17 @@ export function NotePane(p: Props): React.JSX.Element {
               {shown.title}
             </h2>
             <p className="note-meta">
+              {isDigest && (
+                <>
+                  <DigestIcon size={12} /> Digest ·{' '}
+                </>
+              )}
               {mine} {mine === 1 ? 'point' : 'points'} of yours · {ai} AI {ai === 1 ? 'section' : 'sections'}
               {shown.updated && ` · updated ${relative(shown.updated)}`}
+              {mineOnly && ai > 0 && ' · AI sections hidden'}
             </p>
             <div className="blocks">
-              {shown.blocks.map((b, i) =>
+              {shown.blocks.filter((b) => !mineOnly || b.kind !== 'llm').map((b, i) =>
                 b.kind === 'point' ? (
                   <PointBlock
                     key={`${b.id}-${i}`}
@@ -187,15 +246,18 @@ export function NotePane(p: Props): React.JSX.Element {
             <p className="empty-title">No folder selected</p>
             <p>Notes for a folder appear here.</p>
           </div>
-        ) : p.subtopics.length === 0 ? (
+        ) : p.subtopics.length === 0 && p.digests.length === 0 ? (
           <div className="empty-state">
             <NoteIcon size={28} className="empty-icon" />
             <p className="empty-title">No notes yet</p>
             <p>Capture a few points, then press Generate to organise them into subtopics.</p>
+            <button className="btn" onClick={p.onNewDigest}>
+              <DigestIcon size={14} /> New digest
+            </button>
           </div>
         ) : (
           <div className="overview">
-            <h2 className="overview-title">Subtopics</h2>
+            {p.subtopics.length > 0 && <h2 className="overview-title">Subtopics</h2>}
             <ul className="cards" role="list">
               {p.subtopics.map((s) => (
                 <li key={s.slug}>
@@ -209,6 +271,29 @@ export function NotePane(p: Props): React.JSX.Element {
                 </li>
               ))}
             </ul>
+            <div className="overview-head">
+              <h2 className="overview-title">Digests</h2>
+              <button className="btn" onClick={p.onNewDigest}>
+                <PlusIcon size={13} /> New digest
+              </button>
+            </div>
+            {p.digests.length === 0 ? (
+              <p className="muted small">Weekly and monthly recaps of your points appear here.</p>
+            ) : (
+              <ul className="cards" role="list" aria-label="Digests">
+                {p.digests.map((d) => (
+                  <li key={d.id}>
+                    <button className="card" onClick={() => p.onSelect(`${DIGEST_PREFIX}${d.id}`)}>
+                      <DigestIcon size={14} className="card-icon" />
+                      <span className="card-title">{d.title}</span>
+                      <span className="card-sub">
+                        {d.kind === 'week' ? 'Weekly' : 'Monthly'} · {d.pointCount} {d.pointCount === 1 ? 'point' : 'points'}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </div>

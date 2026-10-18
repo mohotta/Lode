@@ -44,6 +44,19 @@ const api: LodeApi = {
     restore: (vaultId, id) => call('trash:restore')({ vaultId, id }),
     purge: (vaultId, id) => call('trash:purge')({ vaultId, ...(id ? { id } : {}) }),
   },
+  review: {
+    list: (vaultId) => call('review:list')({ vaultId }),
+    mark: (vaultId, items) => call('review:mark')({ vaultId, items }),
+  },
+  search: {
+    query: (vaultId, q, limit) => call('search:query')({ vaultId, q, ...(limit ? { limit } : {}) }),
+  },
+  digest: {
+    periods: (vaultId, folder) => call('digest:periods')({ vaultId, folder }),
+    list: (vaultId, folder) => call('digest:list')({ vaultId, folder }),
+    read: (vaultId, folder, digest) => call('digest:read')({ vaultId, folder, digest }),
+    delete: (vaultId, folder, digest) => call('digest:delete')({ vaultId, folder, digest }),
+  },
   link: {
     open: (url) => call('link:open')({ url }),
   },
@@ -58,8 +71,8 @@ const api: LodeApi = {
     clear: (id) => call('keys:clear')({ id }),
   },
   generate: {
-    preview: (vaultId, folder, subtopic) => call('generate:preview')({ vaultId, folder, ...(subtopic ? { subtopic } : {}) }),
-    enqueue: (vaultId, folder, subtopic) => call('generate:enqueue')({ vaultId, folder, ...(subtopic ? { subtopic } : {}) }),
+    preview: (vaultId, folder, target = {}) => call('generate:preview')({ vaultId, folder, ...target }),
+    enqueue: (vaultId, folder, target = {}) => call('generate:enqueue')({ vaultId, folder, ...target }),
     jobs: () => call('generate:jobs')(),
     cancel: (jobId) => call('generate:cancel')({ jobId }),
     dismiss: (jobId) => call('generate:dismiss')({ jobId }),

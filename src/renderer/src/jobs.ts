@@ -17,6 +17,7 @@ export function progressText(p: ProgressView | null): string {
 }
 
 export function jobTitle(j: JobView): string {
+  if (j.kind === 'digest') return `Digest · ${j.digestTitle ?? j.digest ?? ''}`;
   return j.kind === 'regenerate' ? `Regenerate · ${j.subtopicTitle ?? j.subtopic ?? ''}` : `Generate · ${j.folderTitle}`;
 }
 
@@ -35,6 +36,7 @@ export function jobStatusText(j: JobView): string {
       const r = j.report;
       if (!r) return 'Done';
       if (j.kind === 'regenerate') return 'Rewritten';
+      if (j.kind === 'digest') return 'Written';
       return `Filed ${r.filed.length}${r.unfiled.length ? `, ${r.unfiled.length} unfiled` : ''}`;
     }
   }

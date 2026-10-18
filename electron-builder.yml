@@ -1,0 +1,52 @@
+# Packaging (PRD FR-34/35, HLD §13). Build with `pnpm package` (Linux), `package:win`, `package:mac`.
+# electron-vite bundles every runtime dependency into out/, so the app ships no node_modules.
+appId: work.mohotta.lode
+productName: Lode
+executableName: lode
+copyright: Copyright © 2026 Kumudu Mohottala
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+asar: true
+# No auto-update in v1 (FR-36 is P2) and no network on startup.
+publish: null
+
+linux:
+  target: [AppImage, deb, rpm]
+  category: Office
+  icon: build/icon.png
+  synopsis: Capture what you learn; an LLM organises it into notes
+  description: >-
+    Local-first learning backlog. Add short points to a folder's scratchpad; an LLM you
+    choose (bring your own key) files them into subtopic notes with sourced extras, while
+    your own points stay highlighted and unchanged.
+  maintainer: Kumudu Mohottala <kumudulaksitha@gmail.com>
+  syncDesktopName: true
+  desktop:
+    entry:
+      StartupWMClass: Lode
+appImage:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+deb:
+  artifactName: ${name}_${version}_${arch}.${ext}
+rpm:
+  artifactName: ${name}-${version}.${arch}.${ext}
+
+win:
+  target: nsis
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-Setup-${version}.${ext}
+
+mac:
+  target: dmg
+  category: public.app-category.productivity
+  icon: build/icon.png
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}

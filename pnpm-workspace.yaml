@@ -1,5 +1,7 @@
 allowBuilds:
   electron: true
   esbuild: true
+  # Squirrel.Windows helper pulled in by electron-builder; Lode uses NSIS, so its script is not needed.
+  electron-winstaller: false
 minimumReleaseAgeExclude:
   - electron@44.9.0

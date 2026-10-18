@@ -1742,3 +1742,251 @@ button.tag:hover {
   font-size: 12px;
   color: var(--text-3);
 }
+
+/* ---------- My points only ---------- */
+.btn.toggle.on {
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ---------- Sidebar: Search and Review ---------- */
+.nav-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 2px 0 10px;
+}
+.nav-kbd {
+  margin-left: auto;
+  height: 17px;
+  padding: 0 5px;
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.tree-item:hover .nav-kbd {
+  opacity: 1;
+}
+.tree-count.due {
+  margin-left: auto;
+  min-width: 18px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 17px;
+  text-align: center;
+}
+
+/* ---------- Review ---------- */
+.review-group {
+  margin-top: 28px;
+}
+.review-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.review-group-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.review-folder {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.review-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+}
+.review-done {
+  margin-left: auto;
+  height: 26px;
+  font-size: 12px;
+}
+
+/* ---------- Search ---------- */
+.search-box {
+  position: relative;
+  margin: 4px 0 20px;
+}
+.search-box-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-3);
+}
+.search-box input {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px 0 38px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.search-box input:focus {
+  border-color: var(--focus);
+}
+.search-group {
+  margin-bottom: 26px;
+}
+.search-group-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+}
+.search-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.search-hit {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+/* Same language as the note pane: your points are amber callouts, AI text is a dotted rule. */
+.search-hit.mine {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-tint);
+}
+.search-hit.mine.deleted {
+  border-left-style: dashed;
+  opacity: 0.7;
+}
+.search-hit.ai {
+  border-left: 2px dotted var(--ai-line);
+  background: none;
+  color: var(--text-2);
+}
+.search-hit:hover {
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.snippet {
+  overflow-wrap: anywhere;
+}
+.snippet mark {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.search-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+/* ---------- Digests ---------- */
+.overview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 34px 0 16px;
+}
+.overview-head .overview-title {
+  margin: 0;
+}
+.overview .cards + .overview-head {
+  margin-top: 34px;
+}
+.note-meta svg {
+  vertical-align: -2px;
+}
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  margin-bottom: 14px;
+  border-radius: 8px;
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.segmented button {
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.segmented button.on {
+  background: var(--bg-raised);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+.period-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.period {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+}
+.period:hover {
+  border-color: var(--accent);
+}
+.period-title {
+  font-weight: 550;
+}
+.period-sub {
+  font-size: 12px;
+  color: var(--text-3);
+}

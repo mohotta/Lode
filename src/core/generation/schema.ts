@@ -56,6 +56,21 @@ export const GenerationOutputSchema = z.object({
 });
 
 export type GenerationOutput = z.infer<typeof GenerationOutputSchema>;
+
+/** Digest output (FR-26): a recap grouped into themes. Points by ID only (invariant 2). */
+export const DigestOutputSchema = z.object({
+  summary: z.string().max(4000).default(''),
+  themes: z
+    .array(
+      z.object({
+        title: z.string().min(1).max(200),
+        pointIds: z.array(z.string().max(32)).max(200).default([]),
+        summary: z.string().max(3000).default(''),
+      }),
+    )
+    .max(20),
+});
+export type DigestOutput = z.infer<typeof DigestOutputSchema>;
 export type Assignment = z.infer<typeof AssignmentSchema>;
 export type Correction = z.infer<typeof CorrectionSchema>;
 

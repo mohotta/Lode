@@ -1,7 +1,7 @@
 import type { PointId } from '@shared/types';
 import { slugify } from '../formats/slug';
 import type { SearchResult } from '../llm/types';
-import { GenerationOutputSchema, type GenerationOutput } from './schema';
+import { DigestOutputSchema, GenerationOutputSchema, type DigestOutput, type GenerationOutput } from './schema';
 import { sanitizeInline, sanitizeLinkTitle, sanitizeLlmText } from './sanitize';
 import { AllowedUrls, markdownHref } from './urls';
 
@@ -225,4 +225,55 @@ export function validateOutput(output: GenerationOutput, ctx: ValidateContext): 
   if (stats.strippedLinks) warnings.push(`Removed ${stats.strippedLinks} link(s) that were not in the search results.`);
 
   return { assignments: out, corrections, duplicates, leftovers: ctx.sentIds.filter((id) => !assigned.has(id)), warnings, stats };
+}
+
+export type DigestParseResult = { ok: true; output: DigestOutput } | { ok: false; error: string };
+
+export function parseDigestOutput(json: unknown): DigestParseResult {
+  const r = DigestOutputSchema.safeParse(json);
+  if (r.success) return { ok: true, output: r.data };
+  const first = r.error.issues[0];
+  return { ok: false, error: first ? `${first.path.join('.') || 'root'}: ${first.message}` : 'invalid output' };
+}
+
+export interface ValidDigest {
+  summary: string;
+  themes: { title: string; pointIds: PointId[]; summary: string }[];
+  /** Points sent but not placed in any theme. */
+  leftovers: PointId[];
+  warnings: string[];
+}
+
+/**
+ * Digests have no web search, so no link can be verified: every link is reduced to its
+ * label and bare URLs are removed. Each point may appear in one theme only.
+ */
+export function validateDigest(output: DigestOutput, sentIds: readonly PointId[]): ValidDigest {
+  const sent = new Set<string>(sentIds);
+  const none = new AllowedUrls();
+  let stripped = 0;
+  let invented = 0;
+  const clean = (t: string): string => filterLinks(sanitizeLlmText(t), none, () => stripped++);
+  const used = new Set<PointId>();
+  const themes: ValidDigest['themes'] = [];
+  for (const t of output.themes) {
+    const ids: PointId[] = [];
+    for (const raw of t.pointIds) {
+      if (!sent.has(raw)) {
+        invented++;
+        continue;
+      }
+      if (used.has(raw as PointId)) continue;
+      used.add(raw as PointId);
+      ids.push(raw as PointId);
+    }
+    const title = sanitizeInline(t.title).slice(0, 80);
+    const summary = clean(t.summary);
+    if (!title || (ids.length === 0 && !summary)) continue;
+    themes.push({ title, pointIds: ids, summary });
+  }
+  const warnings: string[] = [];
+  if (invented) warnings.push(`Ignored ${invented} point ID(s) the model invented.`);
+  if (stripped) warnings.push(`Removed ${stripped} link(s); digests are not web-sourced.`);
+  return { summary: clean(output.summary), themes, leftovers: sentIds.filter((id) => !used.has(id)), warnings };
 }

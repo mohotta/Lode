@@ -103,3 +103,68 @@ export interface TrashItem {
   folder: string;
   deletedAt: string;
 }
+
+/** Review stage in days: points resurface about 1, 7 and 30 days after they were added. */
+export type ReviewStage = 1 | 7 | 30;
+
+export interface ReviewItem {
+  id: PointId;
+  text: string;
+  date: string;
+  folder: string;
+  folderTitle: string;
+  stage: ReviewStage;
+  /** Notes the point is filed in. */
+  filedUnder: { slug: string; title: string }[];
+}
+
+/**
+ * A search result. Snippets mark matches with U+0001 (start) and U+0002 (end); the
+ * renderer turns those into highlights, so no markup ever crosses IPC.
+ */
+export type SearchHit =
+  | {
+      kind: 'point';
+      id: PointId;
+      folder: string;
+      folderTitle: string;
+      date: string;
+      deleted: boolean;
+      snippet: string;
+    }
+  | {
+      kind: 'ai';
+      folder: string;
+      folderTitle: string;
+      /** Subtopic slug, or a digest ID when `digest` is true. */
+      note: string;
+      noteTitle: string;
+      digest: boolean;
+      correction: boolean;
+      snippet: string;
+    };
+
+export type DigestKind = 'week' | 'month';
+
+/** A recap period. IDs are ISO weeks (`2026-W42`) or months (`2026-10`). */
+export interface DigestPeriod {
+  id: string;
+  kind: DigestKind;
+  title: string;
+  from: string;
+  to: string;
+  /** Live points added in the period. */
+  points: number;
+  /** A digest note for this period already exists. */
+  exists: boolean;
+}
+
+export interface DigestInfo {
+  id: string;
+  kind: DigestKind;
+  title: string;
+  from: string;
+  to: string;
+  pointCount: number;
+  updated: string;
+}

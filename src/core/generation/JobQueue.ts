@@ -7,10 +7,13 @@ export interface JobSpec {
   vaultId: string;
   folder: string;
   folderTitle: string;
-  kind: 'generate' | 'regenerate';
+  kind: 'generate' | 'regenerate' | 'digest';
   /** Regenerate only: the note being rewritten. */
   subtopic?: string;
   subtopicTitle?: string;
+  /** Digest only: the period ID and its title. */
+  digest?: string;
+  digestTitle?: string;
 }
 
 export interface Job<R> extends JobSpec {
@@ -56,7 +59,8 @@ export class JobQueue<R> {
         j.vaultId === spec.vaultId &&
         j.folder === spec.folder &&
         j.kind === spec.kind &&
-        j.subtopic === spec.subtopic,
+        j.subtopic === spec.subtopic &&
+        j.digest === spec.digest,
     );
     if (waiting) return { ...waiting };
     const job: Job<R> = { ...spec, id: this.newId(), status: 'queued', progress: null, queuedAt: new Date().toISOString() };
