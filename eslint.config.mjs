@@ -4,7 +4,18 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 
 export default tseslint.config(
-  { ignores: ['out/**', 'dist/**', 'node_modules/**', 'test-results/**', 'playwright-report/**'] },
+  {
+    // Build output, plus the CI caches that live inside the project dir (.gitlab-ci.yml).
+    ignores: [
+      'out/**',
+      'dist/**',
+      'node_modules/**',
+      'test-results/**',
+      'playwright-report/**',
+      '.cache/**',
+      '.pnpm-store/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
