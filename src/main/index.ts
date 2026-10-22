@@ -6,6 +6,7 @@ import { registerSettingsHandlers } from './ipc/settings';
 import { KeyStore } from './KeyStore';
 import { SettingsStore } from './SettingsStore';
 import { VaultRegistry } from './VaultRegistry';
+import { zoomFor } from './zoom';
 
 // Tests point userData at a temp dir so they never touch a real profile.
 if (process.env.LODE_USER_DATA) app.setPath('userData', process.env.LODE_USER_DATA);
@@ -19,9 +20,6 @@ function isHttp(url: string): boolean {
   }
 }
 
-const ZOOM_MIN = -3;
-const ZOOM_MAX = 5;
-
 /** Ctrl/Cmd + "=" zooms in, "-" out, "0" resets (numpad keys too); the level is remembered in settings. */
 function enableZoom(win: BrowserWindow, settings: SettingsStore): void {
   const wc = win.webContents;
@@ -29,14 +27,8 @@ function enableZoom(win: BrowserWindow, settings: SettingsStore): void {
     void settings.get().then((s) => wc.setZoomLevel(s.zoomLevel));
   });
   wc.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown' || !(input.control || input.meta) || input.alt) return;
-    // Physical key codes, so it works on any keyboard layout; "+" covers Ctrl+Shift+=.
-    const { key, code } = input;
-    let next: number;
-    if (code === 'Equal' || code === 'NumpadAdd' || key === '=' || key === '+') next = Math.min(ZOOM_MAX, wc.getZoomLevel() + 0.5);
-    else if (code === 'Minus' || code === 'NumpadSubtract') next = Math.max(ZOOM_MIN, wc.getZoomLevel() - 0.5);
-    else if (code === 'Digit0' || code === 'Numpad0') next = 0;
-    else return;
+    const next = zoomFor(input, wc.getZoomLevel());
+    if (next === null) return;
     event.preventDefault();
     wc.setZoomLevel(next);
     void settings.update((s) => ({ ...s, zoomLevel: next }));
