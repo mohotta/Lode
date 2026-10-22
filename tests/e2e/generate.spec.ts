@@ -1,6 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { hashBacklogs, removeDir } from '../helpers';
 import { CITED_URL, startFakes, type Fakes } from './fakeServers';
 import { launch, type Launched } from './launch';
@@ -8,6 +8,21 @@ import { launch, type Launched } from './launch';
 let l: Launched;
 let fakes: Fakes;
 const LLM_KEY = 'sk-e2e-fake-key';
+
+/** Pastes plain text into a rich editor, as a real clipboard paste would. */
+async function pasteText(target: Locator, text: string): Promise<void> {
+  await target.focus();
+  await target.evaluate((el, t) => {
+    // Runs in the renderer; this tsconfig has no DOM lib, so the two constructors are typed here.
+    const w = globalThis as unknown as {
+      DataTransfer: new () => { setData(type: string, value: string): void };
+      ClipboardEvent: new (type: string, init: object) => Event;
+    };
+    const data = new w.DataTransfer();
+    data.setData('text/plain', t);
+    el.dispatchEvent(new w.ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  }, text);
+}
 
 test.beforeEach(async () => {
   fakes = await startFakes();
@@ -62,11 +77,16 @@ test('BYOK settings, generate with search, highlighted user points vs AI blocks'
   await page.keyboard.press('Enter');
   const input = page.getByRole('textbox', { name: 'Add a point to Kubernetes' });
   const CODE_POINT = 'Expose a Service with `kubectl expose`:\n```bash\nkubectl expose deploy web --port 80\n```';
-  for (const t of ['ClusterIP services are only reachable inside the cluster', 'kube-proxy IPVS mode scales better', CODE_POINT]) {
+  for (const t of ['ClusterIP services are only reachable inside the cluster', 'kube-proxy IPVS mode scales better']) {
     await input.fill(t);
     await page.keyboard.press('Enter');
-    await expect(input).toHaveValue('');
+    await expect(input).toHaveText('');
   }
+  // The composer is a rich editor: pasted multi-line markdown becomes inline code and a code block.
+  await pasteText(input, CODE_POINT);
+  await expect(input.locator('pre code')).toHaveText('kubectl expose deploy web --port 80');
+  await input.press('Control+Enter');
+  await expect(input).toHaveText('');
   await expect(page.getByLabel('Backlog', { exact: true }).getByText('unfiled')).toHaveCount(3);
   // The user's own code renders as a code block in the backlog, from their exact text.
   await expect(page.getByLabel('Backlog', { exact: true }).locator('pre code')).toHaveText('kubectl expose deploy web --port 80');
@@ -114,16 +134,17 @@ test('BYOK settings, generate with search, highlighted user points vs AI blocks'
   await expect(correction).toContainText('small clusters see little difference');
   await expect(correction).toHaveCSS('border-left-style', 'dashed');
   await expect(page.getByLabel('Backlog', { exact: true }).getByText('needs a fix')).toHaveCount(1);
-  await expect(mine.first()).toContainText('You');
+  // Margin label: the point's date (its title says "Your point").
+  await expect(mine.first().locator('.margin-mark .point-date')).toHaveAttribute('title', /^Your point/);
   await expect(mine.first()).toContainText('ClusterIP services are only reachable inside the cluster');
   // Distinct by shape too, not just colour: solid callout rule for points, dotted rule for AI.
-  await expect(mine.first()).toHaveCSS('border-left-width', '3px');
+  await expect(mine.first()).toHaveCSS('border-left-width', '2px');
   await expect(mine.first()).toHaveCSS('border-left-style', 'solid');
 
   const ai = note.getByRole('article', { name: 'AI-generated explanation' });
   await expect(ai).toHaveCount(1);
   await expect(ai).toHaveCSS('border-left-style', 'dotted');
-  await expect(ai).toContainText('AI');
+  await expect(ai).toContainText('generated');
   await expect(ai.locator('strong')).toHaveText('Service');
   await expect(ai.getByRole('button', { name: /kubernetes\.io/ })).toBeVisible();
   await expect(ai).not.toContainText('made up');

@@ -35,7 +35,6 @@ export function BacklogView(p: Props): React.JSX.Element {
         <section key={day.date} className="day" aria-labelledby={`day-${day.date}`}>
           <h3 id={`day-${day.date}`} className="day-heading">
             {dayLabel(day.date)}
-            <span className="day-count">{day.points.filter((pt) => !pt.deleted).length}</span>
           </h3>
           <ul className="points" role="list">
             {day.points.map((pt) => {
@@ -44,9 +43,10 @@ export function BacklogView(p: Props): React.JSX.Element {
                 <li
                   key={pt.id}
                   id={`point-${pt.id}`}
+                  // Focusable for j/k navigation.
+                  tabIndex={-1}
                   className={`point-row ${pt.deleted ? 'deleted' : ''} ${highlightId === pt.id ? 'flash' : ''}`}
                 >
-                  <span className={`status-dot ${filed ? 'filed' : 'unfiled'}`} aria-hidden="true" />
                   <div className="point-main">
                     {editing === pt.id ? (
                       <PointEditor
@@ -61,24 +61,24 @@ export function BacklogView(p: Props): React.JSX.Element {
                         </div>
                         <div className="point-meta">
                           {pt.deleted ? (
-                            <span className="tag muted-tag">deleted</span>
+                            <span className="meta-note">deleted</span>
                           ) : filed ? (
                             pt.filedUnder.map((s) => (
-                              <button key={s} className="tag" onClick={() => onOpenSubtopic(s)} title={`Open ${titleOf(s)}`}>
+                              <button key={s} className="topic-link" onClick={() => onOpenSubtopic(s)} title={`Open ${titleOf(s)}`}>
                                 {titleOf(s)}
                               </button>
                             ))
                           ) : (
-                            <span className="tag muted-tag">unfiled</span>
+                            <span className="meta-note">unfiled</span>
                           )}
                           {pt.corrected && !pt.deleted && (
-                            <span className="tag fix-tag" title="An AI correction note was added for this point">
+                            <span className="meta-note fix" title="An AI correction note was added for this point">
                               <WarnIcon size={11} /> needs a fix
                             </span>
                           )}
                           {pt.duplicateOf && !pt.deleted && (
                             <button
-                              className="tag dup-tag"
+                              className="meta-note link-btn"
                               title="Generate found this repeats an earlier point. Show it."
                               onClick={() => pt.duplicateOf && p.onJumpToPoint(pt.duplicateOf)}
                             >

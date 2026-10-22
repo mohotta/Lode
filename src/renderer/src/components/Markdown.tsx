@@ -1,4 +1,5 @@
-import ReactMarkdown, { type Components } from 'react-markdown';
+import ReactMarkdown, { type Components, type Options } from 'react-markdown';
+import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import { lode } from '../api';
 
@@ -64,6 +65,12 @@ function remarkKeepBreaks() {
 }
 
 /**
+ * Code is highlighted on the hast tree (spans with hljs classes, no HTML strings). Unlabelled
+ * fences are auto-detected; a wrong guess only changes colours.
+ */
+const rehypePlugins: Options['rehypePlugins'] = [[rehypeHighlight, { detect: true }]];
+
+/**
  * Markdown rendered from the mdast/hast AST. Raw HTML is skipped; only http/https URLs survive.
  * `keepBreaks` is for user-written text, where a newline should look like a newline.
  */
@@ -71,6 +78,7 @@ export function Markdown({ text, keepBreaks = false }: { text: string; keepBreak
   return (
     <ReactMarkdown
       remarkPlugins={keepBreaks ? [remarkGfm, remarkKeepBreaks] : [remarkGfm]}
+      rehypePlugins={rehypePlugins}
       skipHtml
       urlTransform={safeUrl}
       components={components}

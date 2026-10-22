@@ -1,6 +1,6 @@
 import type { ReviewItem, ReviewStage } from '@shared/types';
 import { shortDate } from '../dates';
-import { CheckIcon, PersonIcon, ReviewIcon } from './Icons';
+import { CheckIcon, ReviewIcon } from './Icons';
 import { Markdown } from './Markdown';
 
 interface Props {
@@ -46,7 +46,7 @@ export function ReviewView({ items, onMark, onOpenNote, onShowPoint, onClose }: 
             <section key={stage} className="review-group" aria-labelledby={`review-${stage}`}>
               <div className="review-group-head">
                 <h2 id={`review-${stage}`}>
-                  {STAGE_LABEL[stage]} <span className="day-count">{group.length}</span>
+                  {STAGE_LABEL[stage]} <span className="count">{group.length}</span>
                 </h2>
                 {group.length > 1 && (
                   <button className="btn" onClick={() => void onMark(group)}>
@@ -59,9 +59,6 @@ export function ReviewView({ items, onMark, onOpenNote, onShowPoint, onClose }: 
                   <li key={`${it.id}-${it.stage}`}>
                     <article className="point-block review-card" aria-label={`Your point from ${shortDate(it.date)}`}>
                       <header className="point-head">
-                        <span className="badge you">
-                          <PersonIcon size={12} /> You
-                        </span>
                         <span className="review-folder">{it.folderTitle}</span>
                         <button className="point-date" onClick={() => onShowPoint(it.folder, it.id)} title="Show in backlog">
                           {shortDate(it.date)}
@@ -72,7 +69,7 @@ export function ReviewView({ items, onMark, onOpenNote, onShowPoint, onClose }: 
                       </div>
                       <footer className="review-foot">
                         {it.filedUnder.map((s) => (
-                          <button key={s.slug} className="tag" onClick={() => onOpenNote(it.folder, s.slug)}>
+                          <button key={s.slug} className="topic-link" onClick={() => onOpenNote(it.folder, s.slug)}>
                             {s.title}
                           </button>
                         ))}

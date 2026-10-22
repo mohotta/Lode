@@ -72,8 +72,8 @@ export const PlusIcon = (p: P): React.JSX.Element => (
 
 export const GearIcon = (p: P): React.JSX.Element => (
   <Svg {...p}>
-    <circle cx="8" cy="8" r="2" />
-    <path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7L3.6 3.6" />
+    <path d="M12.70 6.29 L14.43 6.52 L14.43 9.48 L12.70 9.71 L12.53 10.11 L13.60 11.50 L11.50 13.60 L10.11 12.53 L9.71 12.70 L9.48 14.43 L6.52 14.43 L6.29 12.70 L5.89 12.53 L4.50 13.60 L2.40 11.50 L3.47 10.11 L3.30 9.71 L1.57 9.48 L1.57 6.52 L3.30 6.29 L3.47 5.89 L2.40 4.50 L4.50 2.40 L5.89 3.47 L6.29 3.30 L6.52 1.57 L9.48 1.57 L9.71 3.30 L10.11 3.47 L11.50 2.40 L13.60 4.50 L12.53 5.89Z" />
+    <circle cx="8" cy="8" r="2.1" />
   </Svg>
 );
 
@@ -225,5 +225,21 @@ export const DigestIcon = (p: P): React.JSX.Element => (
   <Svg {...p}>
     <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
     <path d="M5 6h6M5 8.5h6M5 11h3.5" />
+  </Svg>
+);
+
+export const GridIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" />
+    <rect x="9" y="2.5" width="4.5" height="4.5" rx="1" />
+    <rect x="2.5" y="9" width="4.5" height="4.5" rx="1" />
+    <rect x="9" y="9" width="4.5" height="4.5" rx="1" />
+  </Svg>
+);
+
+export const ListIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M5.5 4h8M5.5 8h8M5.5 12h8" />
+    <path d="M2.5 4h.01M2.5 8h.01M2.5 12h.01" />
   </Svg>
 );

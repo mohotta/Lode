@@ -2,16 +2,18 @@ import { useEffect, useState } from 'react';
 import type { JobView } from '@shared/ipc';
 import type { DigestInfo, ResolvedNote, SubtopicInfo } from '@shared/types';
 import { lode, unwrap } from '../api';
-import { LlmBlock, PointBlock, RawBlock } from './Blocks';
+import { dayMonth } from '../dates';
+import { host, LlmBlock, PointBlock, RawBlock } from './Blocks';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ChevronRightIcon,
   DotsIcon,
-  HashIcon,
   DigestIcon,
+  GridIcon,
+  HashIcon,
+  ListIcon,
   NoteIcon,
-  PersonIcon,
   PlusIcon,
   RefreshIcon,
   TrashIcon,
@@ -43,6 +45,8 @@ interface Props {
   onEditPoint(id: string, text: string): Promise<boolean>;
   onSetPointDeleted(id: string, deleted: boolean): Promise<void>;
   digests: DigestInfo[];
+  /** Point ID → notes it is filed in (for "Also in"). */
+  filedIn: Map<string, string[]>;
   onNewDigest(): void;
   onRegenerateDigest(id: string, title: string): void;
   onDeleteDigest(id: string, title: string): void;
@@ -52,6 +56,16 @@ interface Props {
 export const DIGEST_PREFIX = 'digest:';
 
 const MINE_ONLY_KEY = 'lode.mineOnly';
+const LAYOUT_KEY = 'lode.overviewLayout';
+
+/** Per-device convenience: cards or list for the folder overview. */
+function loadLayout(): 'cards' | 'list' {
+  try {
+    return localStorage.getItem(LAYOUT_KEY) === 'list' ? 'list' : 'cards';
+  } catch {
+    return 'cards';
+  }
+}
 
 /** Per-device convenience: remembers the My points only toggle. */
 function loadMineOnly(): boolean {
@@ -62,21 +76,29 @@ function loadMineOnly(): boolean {
   }
 }
 
-function relative(iso: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const mins = Math.round((Date.now() - d.getTime()) / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins} min ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours} h ago`;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+/** First line of a point as plain text, for the outline. */
+function excerpt(md: string): string {
+  const line = md
+    .replace(/```[\s\S]*?(```|$)/g, ' ')
+    .split('\n')
+    .map((l) => l.replace(/[`*_>#[\]]/g, '').replace(/\(https?:[^)]*\)/g, '').trim())
+    .find(Boolean);
+  return line ?? 'Code';
 }
 
 export function NotePane(p: Props): React.JSX.Element {
   const { vaultId, folder, active, version, onError } = p;
   const [note, setNote] = useState<ResolvedNote | null>(null);
   const [mineOnly, setMineOnly] = useState<boolean>(loadMineOnly);
+  const [layout, setLayout] = useState(loadLayout);
+  const chooseLayout = (v: 'cards' | 'list'): void => {
+    setLayout(v);
+    try {
+      localStorage.setItem(LAYOUT_KEY, v);
+    } catch {
+      // Storage unavailable: the choice just won't persist.
+    }
+  };
   const toggleMineOnly = (): void => {
     const next = !mineOnly;
     setMineOnly(next);
@@ -105,8 +127,20 @@ export function NotePane(p: Props): React.JSX.Element {
   const isDigest = !!active?.startsWith(DIGEST_PREFIX);
   const activeSlug = isDigest && active ? active.slice(DIGEST_PREFIX.length) : active;
   const shown = note && activeSlug && note.slug === activeSlug && note.folder === folder ? note : null;
-  const mine = shown?.blocks.filter((b) => b.kind === 'point').length ?? 0;
   const ai = shown?.blocks.filter((b) => b.kind === 'llm' && !b.duplicate).length ?? 0;
+  const outlinePoints = (shown?.blocks ?? []).flatMap((b) =>
+    b.kind === 'point' && !b.missing && !b.deleted ? [{ id: b.id, text: excerpt(b.text) }] : [],
+  );
+  const sources = [
+    ...new Map(
+      (shown?.blocks ?? []).flatMap((b) => (b.kind === 'llm' ? b.sources.map((x) => [x.url, x] as const) : [])),
+    ).values(),
+  ];
+  const alsoIn = isDigest
+    ? []
+    : [...new Set(outlinePoints.flatMap((pt) => p.filedIn.get(pt.id) ?? []))]
+        .filter((slug) => slug !== activeSlug)
+        .flatMap((slug) => p.subtopics.filter((x) => x.slug === slug));
 
   return (
     <aside className="note-pane" aria-label="Notes">
@@ -148,28 +182,23 @@ export function NotePane(p: Props): React.JSX.Element {
         </div>
         {shown && (
           <div className="note-actions">
+            {shown.updated && !isDigest && (
+              <span className="updated" title={new Date(shown.updated).toLocaleString()}>
+                Updated {dayMonth(shown.updated)}
+              </span>
+            )}
             <button
               className={`btn toggle ${mineOnly ? 'on' : ''}`}
               aria-pressed={mineOnly}
               onClick={toggleMineOnly}
-              title="Hide AI sections and show only your own points"
+              title="Hide generated sections and show only your own points"
             >
-              <PersonIcon size={14} /> My points
+              My points
             </button>
-            {p.regenJob ? (
+            {p.regenJob && (
               <button className="btn" onClick={() => p.regenJob && p.onOpenJob(p.regenJob.id)}>
                 <span className="spinner small" aria-hidden="true" />
-                {p.regenJob.status === 'queued' ? 'Queued' : isDigest ? 'Writing…' : 'Regenerating…'}
-              </button>
-            ) : (
-              <button
-                className="btn"
-                onClick={() =>
-                  isDigest ? p.onRegenerateDigest(shown.slug, shown.title) : p.onRegenerate(shown.slug, shown.title)
-                }
-                title={isDigest ? 'Write this digest again' : "Rewrite this note's AI sections from all of its points"}
-              >
-                <RefreshIcon size={14} /> Regenerate
+                {p.regenJob.status === 'queued' ? 'Queued' : isDigest ? 'Writing…' : 'Rewriting…'}
               </button>
             )}
             <Menu
@@ -177,6 +206,16 @@ export function NotePane(p: Props): React.JSX.Element {
               trigger={<DotsIcon size={15} />}
               align="end"
               items={isDigest ? [
+                ...(p.regenJob
+                  ? []
+                  : [
+                      {
+                        label: 'Write again',
+                        icon: <RefreshIcon size={14} />,
+                        onSelect: () => p.onRegenerateDigest(shown.slug, shown.title),
+                      },
+                      'separator' as const,
+                    ]),
                 {
                   label: 'Delete digest',
                   icon: <TrashIcon size={14} />,
@@ -184,16 +223,25 @@ export function NotePane(p: Props): React.JSX.Element {
                   onSelect: () => p.onDeleteDigest(shown.slug, shown.title),
                 },
               ] : [
+                ...(p.regenJob
+                  ? []
+                  : [
+                      {
+                        label: 'Rewrite from points…',
+                        icon: <RefreshIcon size={14} />,
+                        onSelect: () => p.onRegenerate(shown.slug, shown.title),
+                      },
+                    ]),
                 ...(shown.canUndo
                   ? [
                       {
-                        label: 'Undo regenerate',
+                        label: 'Undo rewrite',
                         icon: <UndoIcon size={14} />,
                         onSelect: () => void p.onUndoRegenerate(shown.slug),
                       },
-                      'separator' as const,
                     ]
                   : []),
+                'separator' as const,
                 {
                   label: 'Move to trash',
                   icon: <TrashIcon size={14} />,
@@ -208,38 +256,85 @@ export function NotePane(p: Props): React.JSX.Element {
 
       <div className="note-scroll">
         {shown ? (
-          <section className="note" aria-labelledby="note-title">
-            <h2 id="note-title" className="note-title">
-              {shown.title}
-            </h2>
-            <p className="note-meta">
-              {isDigest && (
+          <div className="reader">
+            <section className="note" aria-labelledby="note-title">
+              <h2 id="note-title" className="note-title">
+                {shown.title}
+              </h2>
+              {(isDigest || (mineOnly && ai > 0)) && (
+                <p className="note-meta">
+                  {isDigest && `Digest · written ${dayMonth(shown.updated)}`}
+                  {isDigest && mineOnly && ai > 0 && ' · '}
+                  {mineOnly && ai > 0 && 'Generated sections hidden'}
+                </p>
+              )}
+              <div className="blocks">
+                {shown.blocks.filter((b) => !mineOnly || b.kind !== 'llm').map((b, i) =>
+                  b.kind === 'point' ? (
+                    <PointBlock
+                      key={`${b.id}-${i}`}
+                      block={b}
+                      onJump={p.onJumpToPoint}
+                      onEdit={p.onEditPoint}
+                      onSetDeleted={p.onSetPointDeleted}
+                    />
+                  ) : b.kind === 'llm' ? (
+                    <LlmBlock key={`${b.id}-${i}`} block={b} />
+                  ) : (
+                    <RawBlock key={`raw-${i}`} text={b.text} />
+                  ),
+                )}
+              </div>
+            </section>
+            <nav className="outline" aria-label="Outline">
+              {outlinePoints.length > 0 && (
                 <>
-                  <DigestIcon size={12} /> Digest ·{' '}
+                  <h3 className="outline-head">Your points</h3>
+                  <ul role="list">
+                    {outlinePoints.map((pt) => (
+                      <li key={pt.id}>
+                        <button
+                          className="outline-link"
+                          title={pt.text}
+                          onClick={() => document.getElementById(`np-${pt.id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
+                        >
+                          {pt.text}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </>
               )}
-              {mine} {mine === 1 ? 'point' : 'points'} of yours · {ai} AI {ai === 1 ? 'section' : 'sections'}
-              {shown.updated && ` · updated ${relative(shown.updated)}`}
-              {mineOnly && ai > 0 && ' · AI sections hidden'}
-            </p>
-            <div className="blocks">
-              {shown.blocks.filter((b) => !mineOnly || b.kind !== 'llm').map((b, i) =>
-                b.kind === 'point' ? (
-                  <PointBlock
-                    key={`${b.id}-${i}`}
-                    block={b}
-                    onJump={p.onJumpToPoint}
-                    onEdit={p.onEditPoint}
-                    onSetDeleted={p.onSetPointDeleted}
-                  />
-                ) : b.kind === 'llm' ? (
-                  <LlmBlock key={`${b.id}-${i}`} block={b} />
-                ) : (
-                  <RawBlock key={`raw-${i}`} text={b.text} />
-                ),
+              {alsoIn.length > 0 && (
+                <>
+                  <h3 className="outline-head">Also in</h3>
+                  <ul role="list">
+                    {alsoIn.map((x) => (
+                      <li key={x.slug}>
+                        <button className="outline-link topic-link" onClick={() => p.onSelect(x.slug)}>
+                          {x.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
               )}
-            </div>
-          </section>
+              {sources.length > 0 && (
+                <>
+                  <h3 className="outline-head">Sources</h3>
+                  <ul role="list">
+                    {sources.map((x) => (
+                      <li key={x.url}>
+                        <button className="outline-link" title={x.url} onClick={() => void lode.link.open(x.url)}>
+                          {x.title || host(x.url)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </nav>
+          </div>
         ) : !folder ? (
           <div className="empty-state">
             <NoteIcon size={28} className="empty-icon" />
@@ -257,20 +352,41 @@ export function NotePane(p: Props): React.JSX.Element {
           </div>
         ) : (
           <div className="overview">
-            {p.subtopics.length > 0 && <h2 className="overview-title">Subtopics</h2>}
-            <ul className="cards" role="list">
-              {p.subtopics.map((s) => (
-                <li key={s.slug}>
-                  <button className="card" onClick={() => p.onSelect(s.slug)}>
-                    <HashIcon size={14} className="card-icon" />
-                    <span className="card-title">{s.title}</span>
-                    <span className="card-sub">
-                      {s.pointCount} {s.pointCount === 1 ? 'point' : 'points'}
-                    </span>
+            <div className="overview-head first">
+              <h2 className="overview-title">Subtopics</h2>
+              <div className="view-switch" role="radiogroup" aria-label="Layout">
+                {(['cards', 'list'] as const).map((v) => (
+                  <button
+                    key={v}
+                    role="radio"
+                    aria-checked={layout === v}
+                    aria-label={v === 'cards' ? 'Cards' : 'List'}
+                    title={v === 'cards' ? 'Cards' : 'List'}
+                    className={layout === v ? 'on' : ''}
+                    onClick={() => chooseLayout(v)}
+                  >
+                    {v === 'cards' ? <GridIcon size={14} /> : <ListIcon size={14} />}
                   </button>
-                </li>
-              ))}
-            </ul>
+                ))}
+              </div>
+            </div>
+            {p.subtopics.length === 0 ? (
+              <p className="muted small">Press Generate to organise your points into subtopics.</p>
+            ) : (
+              <ul className={layout === 'cards' ? 'cards' : 'topic-list'} role="list" aria-label="Subtopics">
+                {p.subtopics.map((s) => (
+                  <li key={s.slug}>
+                    <button className={layout === 'cards' ? 'card' : 'topic-row'} onClick={() => p.onSelect(s.slug)}>
+                      {layout === 'cards' && <HashIcon size={14} className="card-icon" />}
+                      <span className="topic-name">{s.title}</span>
+                      <span className="topic-sub">
+                        {s.pointCount} {s.pointCount === 1 ? 'point' : 'points'}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             <div className="overview-head">
               <h2 className="overview-title">Digests</h2>
               <button className="btn" onClick={p.onNewDigest}>
@@ -280,13 +396,16 @@ export function NotePane(p: Props): React.JSX.Element {
             {p.digests.length === 0 ? (
               <p className="muted small">Weekly and monthly recaps of your points appear here.</p>
             ) : (
-              <ul className="cards" role="list" aria-label="Digests">
+              <ul className={layout === 'cards' ? 'cards' : 'topic-list'} role="list" aria-label="Digests">
                 {p.digests.map((d) => (
                   <li key={d.id}>
-                    <button className="card" onClick={() => p.onSelect(`${DIGEST_PREFIX}${d.id}`)}>
-                      <DigestIcon size={14} className="card-icon" />
-                      <span className="card-title">{d.title}</span>
-                      <span className="card-sub">
+                    <button
+                      className={layout === 'cards' ? 'card' : 'topic-row'}
+                      onClick={() => p.onSelect(`${DIGEST_PREFIX}${d.id}`)}
+                    >
+                      {layout === 'cards' && <DigestIcon size={14} className="card-icon" />}
+                      <span className="topic-name">{d.title}</span>
+                      <span className="topic-sub">
                         {d.kind === 'week' ? 'Weekly' : 'Monthly'} · {d.pointCount} {d.pointCount === 1 ? 'point' : 'points'}
                       </span>
                     </button>

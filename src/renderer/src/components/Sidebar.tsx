@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react';
 import type { FolderInfo, SubtopicInfo, VaultInfo } from '@shared/types';
+import { ask } from '../api';
 import type { ThemePref } from '../theme';
 import {
   ChevronDownIcon,
+  ChevronRightIcon,
   DotsIcon,
-  FolderIcon,
   GearIcon,
-  HashIcon,
   MonitorIcon,
   MoonIcon,
   PencilIcon,
@@ -16,7 +16,6 @@ import {
   SearchIcon,
   SunIcon,
   TrashIcon,
-  VaultIcon,
 } from './Icons';
 import { Menu } from './Menu';
 
@@ -87,9 +86,6 @@ export function Sidebar(p: Props): React.JSX.Element {
           triggerClassName="vault-switch"
           trigger={
             <>
-              <span className="vault-mark" aria-hidden="true">
-                <VaultIcon size={15} />
-              </span>
               <span className="vault-name">{vault?.name ?? 'No vault'}</span>
               <ChevronDownIcon size={14} className="vault-chevron" />
             </>
@@ -104,21 +100,22 @@ export function Sidebar(p: Props): React.JSX.Element {
             { label: 'Open or create a vault…', icon: <PlusIcon size={14} />, onSelect: p.onOpenVault },
           ]}
         />
+        {vault && (
+          <button
+            className={`icon-btn ${p.searchOpen ? 'selected' : ''}`}
+            aria-label="Search"
+            title="Search points and notes (Ctrl+K)"
+            onClick={p.onOpenSearch}
+          >
+            <SearchIcon size={15} />
+          </button>
+        )}
       </div>
 
       <div className="sidebar-scroll">
         {vault ? (
           <>
             <div className="nav-items">
-              <button
-                className={`tree-item ${p.searchOpen ? 'selected' : ''}`}
-                onClick={p.onOpenSearch}
-                title="Search points and notes (Ctrl+K)"
-              >
-                <SearchIcon size={15} className="tree-icon" />
-                <span className="tree-label">Search</span>
-                <kbd className="nav-kbd">Ctrl K</kbd>
-              </button>
               <button className={`tree-item ${p.reviewOpen ? 'selected' : ''}`} onClick={p.onOpenReview}>
                 <ReviewIcon size={15} className="tree-icon" />
                 <span className="tree-label">Review</span>
@@ -166,7 +163,11 @@ export function Sidebar(p: Props): React.JSX.Element {
                         aria-current={active ? 'page' : undefined}
                         onClick={() => p.onSelectFolder(f.slug)}
                       >
-                        <FolderIcon size={15} className="tree-icon" />
+                        {active ? (
+                          <ChevronDownIcon size={13} className="tree-icon" />
+                        ) : (
+                          <ChevronRightIcon size={13} className="tree-icon" />
+                        )}
                         <span className="tree-label">{f.title}</span>
                       </button>
                       <span className="row-actions">
@@ -189,7 +190,13 @@ export function Sidebar(p: Props): React.JSX.Element {
                               icon: <TrashIcon size={14} />,
                               danger: true,
                               onSelect: () => {
-                                if (confirm(`Move "${f.title}" to the trash? You can restore it from Trash.`)) void p.onDeleteFolder(f.slug);
+                                void ask({
+                                  message: `Move "${f.title}" to the trash?`,
+                                  detail: 'You can restore it from Trash.',
+                                  confirmLabel: 'Move to trash',
+                                }).then((ok) => {
+                                  if (ok) void p.onDeleteFolder(f.slug);
+                                });
                               },
                             },
                           ]}
@@ -225,7 +232,6 @@ export function Sidebar(p: Props): React.JSX.Element {
                                   onClick={() => p.onSelectSubtopic(s.slug)}
                                   title={s.title}
                                 >
-                                  <HashIcon size={13} className="tree-icon" />
                                   <span className="tree-label">{s.title}</span>
                                   <span className="tree-count" aria-label={`${s.pointCount} points`}>
                                     {s.pointCount}
@@ -246,7 +252,7 @@ export function Sidebar(p: Props): React.JSX.Element {
                                         },
                                       },
                                       {
-                                        label: 'Regenerate',
+                                        label: 'Rewrite from points…',
                                         icon: <RefreshIcon size={14} />,
                                         onSelect: () => p.onRegenerateSubtopic(s.slug, s.title),
                                       },

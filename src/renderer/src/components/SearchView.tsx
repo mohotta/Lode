@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { SearchHit } from '@shared/types';
 import { lode, unwrap } from '../api';
 import { shortDate } from '../dates';
-import { DigestIcon, HashIcon, PersonIcon, SearchIcon, SparkIcon, WarnIcon } from './Icons';
+import { SearchIcon, WarnIcon } from './Icons';
 
 interface Props {
   vaultId: string;
@@ -92,7 +92,7 @@ export function SearchView({ vaultId, query, onQuery, onOpenPoint, onOpenNote, o
       {mine.length > 0 && (
         <section aria-labelledby="search-mine" className="search-group">
           <h2 id="search-mine" className="search-group-title">
-            <PersonIcon size={13} /> Your points <span className="day-count">{mine.length}</span>
+            Your points <span className="count">{mine.length}</span>
           </h2>
           <ul className="search-list" role="list" aria-label="Matching points">
             {mine.map((h) =>
@@ -114,7 +114,7 @@ export function SearchView({ vaultId, query, onQuery, onOpenPoint, onOpenNote, o
       {ai.length > 0 && (
         <section aria-labelledby="search-ai" className="search-group">
           <h2 id="search-ai" className="search-group-title">
-            <SparkIcon size={13} /> AI notes <span className="day-count">{ai.length}</span>
+            Generated notes <span className="count">{ai.length}</span>
           </h2>
           <ul className="search-list" role="list" aria-label="Matching AI text">
             {ai.map((h, i) =>
@@ -123,7 +123,7 @@ export function SearchView({ vaultId, query, onQuery, onOpenPoint, onOpenNote, o
                   <button className="search-hit ai" onClick={() => onOpenNote(h.folder, h.note, h.digest)}>
                     <Snippet text={h.snippet} />
                     <span className="search-meta">
-                      {h.digest ? <DigestIcon size={11} /> : <HashIcon size={11} />} {h.noteTitle} · {h.folderTitle}
+                      {h.digest ? 'Digest: ' : ''}{h.noteTitle} · {h.folderTitle}
                       {h.correction && (
                         <>
                           {' '}

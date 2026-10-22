@@ -48,7 +48,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   for (const t of ['ClusterIP services are only reachable inside the cluster', 'kube-proxy IPVS mode scales better']) {
     await input.fill(t);
     await page.keyboard.press('Enter');
-    await expect(input).toHaveValue('');
+    await expect(input).toHaveText('');
   }
   await expect(rows).toHaveCount(2);
 
@@ -63,7 +63,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   await expect(page.getByText('Looks like an earlier point')).toBeVisible();
   await page.getByRole('button', { name: 'Add anyway' }).click();
   await expect(rows).toHaveCount(3);
-  await expect(input).toHaveValue('');
+  await expect(input).toHaveText('');
 
   // --- Edit a point in place: same ID, new text on disk.
   const dayFile = join(vaultRoot, 'kubernetes', 'backlog', (await readdir(join(vaultRoot, 'kubernetes', 'backlog')))[0]!);
@@ -114,7 +114,8 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   // --- Regenerate: all of the note's points are sent again; AI text is replaced; undo restores it.
   const notePath = join(vaultRoot, 'kubernetes', 'notes', 'service-networking.md');
   const original = await readFile(notePath, 'utf8');
-  await page.getByRole('button', { name: 'Regenerate', exact: true }).click();
+  await page.getByRole('button', { name: 'Note actions' }).click();
+  await page.getByRole('menuitem', { name: 'Rewrite from points…' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Regenerate from 3 point(s)' }).click();
   await expect(bar.getByText('Rewritten')).toBeVisible();
   const note = page.getByRole('region', { name: 'Service networking & kube-proxy' });
@@ -127,7 +128,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   await page.screenshot({ path: 'test-results/regenerate-statusbar-dark.png' });
 
   await page.getByRole('button', { name: 'Note actions' }).click();
-  await page.getByRole('menuitem', { name: 'Undo regenerate' }).click();
+  await page.getByRole('menuitem', { name: 'Undo rewrite' }).click();
   await expect(note.getByText('Rewritten:')).toHaveCount(0);
   expect(await readFile(notePath, 'utf8')).toBe(original);
 
