@@ -49,10 +49,14 @@ test('Ctrl = zooms in, Ctrl - zooms out, Ctrl 0 resets, and the level is saved',
   const { app, userData } = l;
   const zoom = (): Promise<number> =>
     app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.getZoomLevel());
-  // Real input events (Playwright's synthetic keys skip Electron's before-input-event).
+  // Real input events (Playwright's synthetic keys skip Electron's before-input-event). They only
+  // reach a focused window, and CI's display has no window manager, so focus it explicitly.
   const press = (keyCode: string): Promise<void> =>
     app.evaluate(({ BrowserWindow }, k) => {
-      const wc = BrowserWindow.getAllWindows()[0]!.webContents;
+      const win = BrowserWindow.getAllWindows()[0]!;
+      win.focus();
+      const wc = win.webContents;
+      wc.focus();
       wc.sendInputEvent({ type: 'keyDown', keyCode: k, modifiers: ['control'] });
       wc.sendInputEvent({ type: 'keyUp', keyCode: k, modifiers: ['control'] });
     }, keyCode);
@@ -113,7 +117,8 @@ test('backfill a point to an earlier day with the composer date picker', async (
   expect(await readdir(join(vaultRoot, 'postgres', 'backlog'))).toEqual([`${past}.md`]);
 
   // The date chip opens the themed calendar; future days are disabled and Escape closes it.
-  await page.getByRole('button', { name: /^\d+ \w+ \d{4}$/ }).click();
+  // Found by its title: the visible date text depends on the machine's locale.
+  await page.getByTitle('Choose the day this point belongs to').click();
   const cal = page.getByRole('dialog', { name: 'Choose a day' });
   await expect(cal).toBeVisible();
   await expect(cal.getByRole('gridcell', { selected: true })).toHaveCount(1);
