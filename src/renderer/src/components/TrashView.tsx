@@ -1,4 +1,5 @@
 import type { FolderInfo, TrashItem } from '@shared/types';
+import { ask } from '../api';
 import { FolderIcon, NoteIcon, TrashIcon, UndoIcon } from './Icons';
 
 interface Props {
@@ -26,7 +27,14 @@ export function TrashView({ items, folders, onRestore, onPurge, onClose }: Props
             className="btn danger"
             disabled={items.length === 0}
             onClick={() => {
-              if (confirm(`Permanently delete ${items.length} item(s)? This cannot be undone.`)) void onPurge();
+              void ask({
+                message: `Permanently delete ${items.length} item(s)?`,
+                detail: 'This cannot be undone.',
+                confirmLabel: 'Delete permanently',
+                danger: true,
+              }).then((ok) => {
+                if (ok) void onPurge();
+              });
             }}
           >
             Empty trash
@@ -68,7 +76,14 @@ export function TrashView({ items, folders, onRestore, onPurge, onClose }: Props
                 aria-label={`Delete ${it.title} forever`}
                 title="Delete forever"
                 onClick={() => {
-                  if (confirm(`Permanently delete "${it.title}"? This cannot be undone.`)) void onPurge(it);
+                  void ask({
+                    message: `Permanently delete "${it.title}"?`,
+                    detail: 'This cannot be undone.',
+                    confirmLabel: 'Delete permanently',
+                    danger: true,
+                  }).then((ok) => {
+                    if (ok) void onPurge(it);
+                  });
                 }}
               >
                 <TrashIcon size={14} />

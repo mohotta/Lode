@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { ResolvedBlock } from '@shared/types';
 import { lode } from '../api';
-import { shortDate } from '../dates';
-import { CopyIcon, DotsIcon, LinkIcon, PencilIcon, PersonIcon, SparkIcon, TrashIcon, UndoIcon, WarnIcon } from './Icons';
+import { dayMonth, shortDate } from '../dates';
+import { CopyIcon, DotsIcon, PencilIcon, TrashIcon, WarnIcon } from './Icons';
 import { Markdown } from './Markdown';
 import { Menu } from './Menu';
 import { PointEditor } from './PointEditor';
@@ -17,19 +17,20 @@ interface PointActions {
 }
 
 /**
- * The user's own point, rendered from backlog text. A callout with accent border,
- * tint, person icon and a "You" label, so it never relies on colour alone (FR-23).
+ * The user's own point, rendered from backlog text. Primary content: full-contrast type, a solid
+ * accent rule and a margin date; AI text is muted with a dotted rule and a "generated" label,
+ * so the two never differ by colour alone (FR-23).
  */
 export function PointBlock({ block, ...a }: { block: PointB } & PointActions): React.JSX.Element {
   const [editing, setEditing] = useState(false);
   if (block.missing || block.deleted) {
     return (
       <div className="point-block removed" role="note" aria-label="Removed point">
-        <WarnIcon size={14} />
+        <WarnIcon size={13} />
         <span>{block.missing ? 'This point is no longer in the backlog' : 'You removed this point'}</span>
         {block.deleted && (
-          <button className="btn small-btn" onClick={() => void a.onSetDeleted(block.id, false)}>
-            <UndoIcon size={13} /> Restore
+          <button className="link-btn" onClick={() => void a.onSetDeleted(block.id, false)}>
+            Restore
           </button>
         )}
       </div>
@@ -38,18 +39,15 @@ export function PointBlock({ block, ...a }: { block: PointB } & PointActions): R
   if (block.duplicateOf) {
     const of = block.duplicateOf;
     return (
-      <article className="point-block repeat" aria-label={`Your point from ${shortDate(block.date)}, a repeat`}>
-        <header className="point-head">
-          <span className="badge you">
-            <PersonIcon size={12} /> You
-          </span>
-          <span className="badge repeat-badge">
-            <CopyIcon size={12} /> Repeat of {of.date ? shortDate(of.date) : 'an earlier point'}
-          </span>
+      <article id={`np-${block.id}`} className="point-block repeat" aria-label={`Your point from ${shortDate(block.date)}, a repeat`}>
+        <div className="margin-mark">
           <button className="point-date" onClick={() => a.onJump(block.id)} title="Show in backlog">
-            {shortDate(block.date)}
+            {dayMonth(block.date)}
           </button>
-        </header>
+          <span className="mark-note">
+            <CopyIcon size={11} /> Repeat of {of.date ? dayMonth(of.date) : 'an earlier point'}
+          </span>
+        </div>
         <div className="point-body user-md">
           <Markdown text={block.text} keepBreaks />
         </div>
@@ -58,41 +56,39 @@ export function PointBlock({ block, ...a }: { block: PointB } & PointActions): R
   }
   return (
     <article
+      id={`np-${block.id}`}
       className={`point-block ${block.corrected ? 'has-fix' : ''}`}
       aria-label={`Your point from ${shortDate(block.date)}`}
     >
-      <header className="point-head">
-        <span className="badge you">
-          <PersonIcon size={12} /> You
-        </span>
-        {block.corrected && (
-          <span className="badge needs-fix" title="An AI correction note follows this point">
-            <WarnIcon size={12} /> Needs a fix
-          </span>
-        )}
-        <button className="point-date" onClick={() => a.onJump(block.id)} title="Show in backlog">
-          {shortDate(block.date)}
+      <div className="margin-mark">
+        <button className="point-date" onClick={() => a.onJump(block.id)} title={`Your point · ${shortDate(block.date)} · show in backlog`}>
+          {dayMonth(block.date)}
         </button>
-        {!editing && (
-          <span className="point-block-actions">
-            <Menu
-              label="Point actions"
-              trigger={<DotsIcon size={14} />}
-              align="end"
-              items={[
-                { label: 'Edit', icon: <PencilIcon size={14} />, onSelect: () => setEditing(true) },
-                'separator',
-                {
-                  label: 'Delete',
-                  icon: <TrashIcon size={14} />,
-                  danger: true,
-                  onSelect: () => void a.onSetDeleted(block.id, true),
-                },
-              ]}
-            />
+        {block.corrected && (
+          <span className="mark-note fix" title="An AI correction note follows this point">
+            <WarnIcon size={11} /> Needs a fix
           </span>
         )}
-      </header>
+      </div>
+      {!editing && (
+        <span className="point-block-actions">
+          <Menu
+            label="Point actions"
+            trigger={<DotsIcon size={14} />}
+            align="end"
+            items={[
+              { label: 'Edit', icon: <PencilIcon size={14} />, onSelect: () => setEditing(true) },
+              'separator',
+              {
+                label: 'Delete',
+                icon: <TrashIcon size={14} />,
+                danger: true,
+                onSelect: () => void a.onSetDeleted(block.id, true),
+              },
+            ]}
+          />
+        </span>
+      )}
       {editing ? (
         <PointEditor initial={block.text} onSave={(t) => a.onEdit(block.id, t)} onCancel={() => setEditing(false)} />
       ) : (
@@ -105,7 +101,7 @@ export function PointBlock({ block, ...a }: { block: PointB } & PointActions): R
   );
 }
 
-function host(url: string): string {
+export function host(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
   } catch {
@@ -113,16 +109,20 @@ function host(url: string): string {
   }
 }
 
+function aiTitle(block: LlmB): string {
+  const model = block.model.replace(/^openai-compatible\//, '');
+  return block.at ? `Generated by ${model} · ${dayMonth(block.at)}` : `Generated by ${model}`;
+}
+
 /** AI note that the point above contains a mistake. Warning icon + label + dashed rule, not colour alone. */
 function CorrectionBlock({ block }: { block: LlmB }): React.JSX.Element {
   return (
     <aside className="correction-block" aria-label="AI correction for your point above">
-      <header className="llm-head">
-        <span className="badge fix">
-          <WarnIcon size={12} /> Correction
+      <div className="margin-mark" title={aiTitle(block)}>
+        <span className="mark-note fix">
+          <WarnIcon size={11} /> Correction
         </span>
-        <span className="llm-meta">AI · about your point above</span>
-      </header>
+      </div>
       <div className="prose">
         <Markdown text={block.body} />
       </div>
@@ -134,32 +134,27 @@ function CorrectionBlock({ block }: { block: LlmB }): React.JSX.Element {
 function Sources({ block }: { block: LlmB }): React.JSX.Element | null {
   if (block.sources.length === 0) return null;
   return (
-    <footer className="sources" aria-label="Sources">
+    <p className="sources" aria-label="Sources">
+      <span className="sources-label">Sources</span>
       {block.sources.map((s) => (
         <button key={s.url} className="source" title={s.url} onClick={() => void lode.link.open(s.url)}>
-          <LinkIcon size={12} /> {host(s.url)}
+          {host(s.url)}
         </button>
       ))}
-    </footer>
+    </p>
   );
 }
 
-/** Generated content: reads as quiet body text, with an AI badge, dotted rule and source pills. */
+/** Generated content: secondary, muted prose with a dotted rule and a "generated" margin label. */
 export function LlmBlock({ block }: { block: LlmB }): React.JSX.Element | null {
   if (block.correctionFor) return <CorrectionBlock block={block} />;
   // A repeat marker carries no prose; the point above already shows "Repeat of …".
   if (block.duplicate) return null;
   return (
     <article className="llm-block" aria-label="AI-generated explanation">
-      <header className="llm-head">
-        <span className="badge ai">
-          <SparkIcon size={12} /> AI
-        </span>
-        <span className="llm-meta">
-          {block.model.replace(/^openai-compatible\//, '')}
-          {block.at && ` · ${new Date(block.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
-        </span>
-      </header>
+      <div className="margin-mark" title={aiTitle(block)}>
+        <span className="mark-ai">generated</span>
+      </div>
       <div className="llm-body prose">
         <Markdown text={block.body} />
       </div>

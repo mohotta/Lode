@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 
 /** Pane width limits in px. The note pane always keeps at least NOTE_MIN (enforced in CSS). */
-export const SIDEBAR = { initial: 248, min: 190, max: 420 };
-export const BACKLOG = { initial: 380, min: 290, max: 680 };
+export const SIDEBAR = { initial: 220, min: 180, max: 400 };
+export const BACKLOG = { initial: 300, min: 240, max: 640 };
 export const NOTE_MIN = 360;
 
 const KEY = 'lode.paneWidths';

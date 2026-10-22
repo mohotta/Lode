@@ -1,6 +1,8 @@
-import { forwardRef, useRef, useState } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { localDate, shortDate } from '../dates';
-import { CalendarIcon, CloseIcon, CopyIcon, PlusIcon, ReturnIcon } from './Icons';
+import { CalendarIcon, CloseIcon, CopyIcon } from './Icons';
+import { Calendar } from './Calendar';
+import { RichEditor, type RichEditorHandle } from './RichEditor';
 
 export interface DuplicateInfo {
   id: string;
@@ -25,10 +27,11 @@ function excerpt(text: string): string {
 }
 
 /**
- * Enter adds the point; Shift+Enter inserts a newline for multi-line points.
+ * Rich editor that stores markdown. Enter adds the point; Shift+Enter breaks the line;
+ * inside a code block or list, Enter continues it and Ctrl+Enter adds.
  * A picked date stays until changed or reset (handy for backfilling one day).
  */
-export const Scratchpad = forwardRef<HTMLTextAreaElement, Props>(function Scratchpad(
+export const Scratchpad = forwardRef<RichEditorHandle, Props>(function Scratchpad(
   { folderTitle, onAdd, onShowPoint },
   ref,
 ) {
@@ -36,18 +39,27 @@ export const Scratchpad = forwardRef<HTMLTextAreaElement, Props>(function Scratc
   const [busy, setBusy] = useState(false);
   const [dup, setDup] = useState<DuplicateInfo | null>(null);
   const [date, setDate] = useState<string | null>(null);
-  const picker = useRef<HTMLInputElement>(null);
+  const [calendar, setCalendar] = useState(false);
   const today = localDate(new Date());
   // A picked date that has become "today" (or is invalid/future) behaves like no pick.
   const picked = date && date < today ? date : null;
 
-  const submit = async (force = false): Promise<void> => {
-    if (!text.trim() || busy) return;
+  const editor = useRef<RichEditorHandle | null>(null);
+  useImperativeHandle(ref, () => ({
+    focus: () => editor.current?.focus(),
+    clear: () => editor.current?.clear(),
+  }));
+
+  const submit = async (value = text, force = false): Promise<void> => {
+    if (!value.trim() || busy) return;
     setBusy(true);
     try {
-      const repeat = await onAdd(text, picked ?? undefined, force);
+      const repeat = await onAdd(value, picked ?? undefined, force);
       setDup(repeat);
-      if (!repeat) setText('');
+      if (!repeat) {
+        editor.current?.clear();
+        setText('');
+      }
     } finally {
       setBusy(false);
     }
@@ -56,36 +68,16 @@ export const Scratchpad = forwardRef<HTMLTextAreaElement, Props>(function Scratc
   return (
     <div className="composer-wrap">
       <div className={`composer ${text ? 'has-text' : ''}`}>
-        <PlusIcon size={15} className="composer-icon" />
-        <label htmlFor="scratchpad-input" className="visually-hidden">
-          Add a point to {folderTitle}
-        </label>
-        <textarea
-          id="scratchpad-input"
-          ref={ref}
-          className="composer-input"
+        <RichEditor
+          ref={editor}
+          label={`Add a point to ${folderTitle}`}
           placeholder={picked ? `What did you learn on ${shortDate(picked)}?` : 'What did you learn?'}
-          rows={Math.min(6, Math.max(1, text.split('\n').length))}
-          value={text}
-          maxLength={4000}
-          onChange={(e) => {
-            setText(e.target.value);
+          onChange={(md) => {
+            setText(md);
             setDup(null);
           }}
-          onKeyDown={(e) => {
-            // Inside an unclosed ``` fence, Enter is a newline so code can be typed naturally.
-            const inFence = ((text.match(/^\s*```/gm) ?? []).length % 2) === 1;
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !inFence) {
-              e.preventDefault();
-              void submit();
-            }
-          }}
+          onSubmit={(md) => void submit(md)}
         />
-        <span className="composer-hint" aria-hidden="true">
-          <kbd>
-            <ReturnIcon size={12} />
-          </kbd>
-        </span>
       </div>
 
       {dup && (
@@ -102,7 +94,7 @@ export const Scratchpad = forwardRef<HTMLTextAreaElement, Props>(function Scratc
               Show
             </button>
             {!dup.exact && (
-              <button className="btn primary" onClick={() => void submit(true)}>
+              <button className="btn primary" onClick={() => void submit(text, true)}>
                 Add anyway
               </button>
             )}
@@ -119,15 +111,11 @@ export const Scratchpad = forwardRef<HTMLTextAreaElement, Props>(function Scratc
             type="button"
             className="date-chip-btn"
             title="Choose the day this point belongs to"
-            onClick={() => {
-              const el = picker.current;
-              if (!el) return;
-              try {
-                el.showPicker();
-              } catch {
-                el.focus();
-              }
-            }}
+            aria-haspopup="dialog"
+            aria-expanded={calendar}
+            // Don't let the calendar's outside-click close fire before this toggle.
+            onMouseDown={(e) => calendar && e.stopPropagation()}
+            onClick={() => setCalendar((o) => !o)}
           >
             <CalendarIcon size={13} />
             <span>{picked ? shortDate(picked) : 'Today'}</span>
@@ -143,8 +131,20 @@ export const Scratchpad = forwardRef<HTMLTextAreaElement, Props>(function Scratc
               <CloseIcon size={11} />
             </button>
           )}
+          {calendar && (
+            <Calendar
+              value={picked ?? today}
+              max={today}
+              onPick={(d) => {
+                setDate(d < today ? d : null);
+                setCalendar(false);
+                editor.current?.focus();
+              }}
+              onClose={() => setCalendar(false)}
+            />
+          )}
+          {/* Typed entry for keyboard users (visible on focus); the calendar is the pointer path. */}
           <input
-            ref={picker}
             type="date"
             className="date-input"
             aria-label="Entry date"
@@ -162,7 +162,7 @@ export const Scratchpad = forwardRef<HTMLTextAreaElement, Props>(function Scratc
           </span>
         )}
         <span className="composer-md-hint">
-          Markdown · <code>```</code> for code · <kbd>Shift</kbd>+<kbd>↵</kbd> new line
+          <kbd>↵</kbd> add · <kbd>Shift</kbd>+<kbd>↵</kbd> new line · <code>```</code> code
         </span>
       </div>
     </div>

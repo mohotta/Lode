@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { app, BrowserWindow, session, shell } from 'electron';
+import { app, BrowserWindow, Menu, session, shell, type MenuItemConstructorOptions } from 'electron';
 import { registerCaptureHandlers } from './ipc/capture';
 import { registerGenerateHandlers } from './ipc/generate';
 import { registerSettingsHandlers } from './ipc/settings';
@@ -19,14 +19,71 @@ function isHttp(url: string): boolean {
   }
 }
 
-function createWindow(): BrowserWindow {
+const ZOOM_MIN = -3;
+const ZOOM_MAX = 5;
+
+/** Ctrl/Cmd + "=" zooms in, "-" out, "0" resets (numpad keys too); the level is remembered in settings. */
+function enableZoom(win: BrowserWindow, settings: SettingsStore): void {
+  const wc = win.webContents;
+  wc.on('did-finish-load', () => {
+    void settings.get().then((s) => wc.setZoomLevel(s.zoomLevel));
+  });
+  wc.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || !(input.control || input.meta) || input.alt) return;
+    // Physical key codes, so it works on any keyboard layout; "+" covers Ctrl+Shift+=.
+    const { key, code } = input;
+    let next: number;
+    if (code === 'Equal' || code === 'NumpadAdd' || key === '=' || key === '+') next = Math.min(ZOOM_MAX, wc.getZoomLevel() + 0.5);
+    else if (code === 'Minus' || code === 'NumpadSubtract') next = Math.max(ZOOM_MIN, wc.getZoomLevel() - 0.5);
+    else if (code === 'Digit0' || code === 'Numpad0') next = 0;
+    else return;
+    event.preventDefault();
+    wc.setZoomLevel(next);
+    void settings.update((s) => ({ ...s, zoomLevel: next }));
+  });
+}
+
+/** Right-click menu: spelling suggestions for a misspelled word, then the usual edit actions. */
+function enableContextMenu(win: BrowserWindow): void {
+  const wc = win.webContents;
+  wc.on('context-menu', (_event, params) => {
+    const items: MenuItemConstructorOptions[] = [];
+    if (params.misspelledWord) {
+      for (const word of params.dictionarySuggestions.slice(0, 6)) {
+        items.push({ label: word, click: () => wc.replaceMisspelling(word) });
+      }
+      if (params.dictionarySuggestions.length === 0) items.push({ label: 'No suggestions', enabled: false });
+      items.push(
+        {
+          label: 'Add to dictionary',
+          click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+        },
+        { type: 'separator' },
+      );
+    }
+    if (params.isEditable) {
+      items.push(
+        { role: 'cut', enabled: params.editFlags.canCut },
+        { role: 'copy', enabled: params.editFlags.canCopy },
+        { role: 'paste', enabled: params.editFlags.canPaste },
+        { type: 'separator' },
+        { role: 'selectAll' },
+      );
+    } else if (params.selectionText.trim()) {
+      items.push({ role: 'copy' });
+    }
+    if (items.length) Menu.buildFromTemplate(items).popup({ window: win });
+  });
+}
+
+function createWindow(settings: SettingsStore): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 900,
     minHeight: 560,
     show: false,
-    title: 'Lode — Mine what you learn',
+    title: 'Lode - Mine what you learn',
     backgroundColor: '#16181d',
     autoHideMenuBar: true,
     webPreferences: {
@@ -40,6 +97,8 @@ function createWindow(): BrowserWindow {
   });
 
   win.once('ready-to-show', () => win.show());
+  enableZoom(win, settings);
+  enableContextMenu(win);
 
   // No in-app navigation or popups: links go to the system browser, http/https only.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -66,9 +125,9 @@ app.whenReady().then(() => {
   registerSettingsHandlers(settings, keys, app.isPackaged);
   registerGenerateHandlers(registry, settings, keys);
 
-  createWindow();
+  createWindow(settings);
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) createWindow(settings);
   });
 });
 

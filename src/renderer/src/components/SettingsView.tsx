@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyIdName, SettingsView as SV } from '@shared/ipc';
 import { lode, unwrap } from '../api';
+import { ACCENTS, type Accent } from '../theme';
 import { WarnIcon } from './Icons';
 
 interface Props {
   onClose(): void;
+  accent: Accent;
+  onAccent(a: Accent): void;
 }
 
 function KeyRow({ id, label, help, saved, onChange }: {
@@ -81,7 +84,8 @@ function KeyRow({ id, label, help, saved, onChange }: {
   );
 }
 
-export function SettingsView({ onClose }: Props): React.JSX.Element {
+export function SettingsView(p: Props): React.JSX.Element {
+  const { onClose } = p;
   const [s, setS] = useState<SV | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [baseUrl, setBaseUrl] = useState('');
@@ -135,7 +139,7 @@ export function SettingsView({ onClose }: Props): React.JSX.Element {
   const g = s.generation;
 
   return (
-    <div className="settings">
+    <div className="settings prefs">
       <header className="center-header">
         <h1>Settings</h1>
         <button className="btn" onClick={onClose}>
@@ -165,6 +169,26 @@ export function SettingsView({ onClose }: Props): React.JSX.Element {
           </div>
         </div>
       )}
+
+      <fieldset className="field-group">
+        <legend>Appearance</legend>
+        <p>Accent colour for your points, the open note and the review count. Zoom with Ctrl =, Ctrl − and Ctrl 0.</p>
+        <div className="swatches" role="radiogroup" aria-label="Accent colour">
+          {(Object.keys(ACCENTS) as Accent[]).map((a) => (
+            <button
+              key={a}
+              role="radio"
+              aria-checked={p.accent === a}
+              className={`swatch ${p.accent === a ? 'on' : ''}`}
+              style={{ '--sw-l': ACCENTS[a].light, '--sw-d': ACCENTS[a].dark } as React.CSSProperties}
+              onClick={() => p.onAccent(a)}
+            >
+              <span className="swatch-dot" aria-hidden="true" />
+              {ACCENTS[a].label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
 
       <fieldset className="field-group">
         <legend>LLM provider (OpenAI-compatible)</legend>

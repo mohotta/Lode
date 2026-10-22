@@ -75,6 +75,10 @@ export interface LodeApi {
   link: {
     open(url: string): R<void>;
   };
+  ui: {
+    /** Native OS confirmation box; resolves true when the user confirms. */
+    confirm(opts: { message: string; detail?: string; confirmLabel: string; danger?: boolean }): R<boolean>;
+  };
   settings: {
     get(): R<SettingsView>;
     set(patch: {

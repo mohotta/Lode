@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { RichEditor } from './RichEditor';
 
 interface Props {
   initial: string;
@@ -11,13 +12,14 @@ export function PointEditor({ initial, onSave, onCancel }: Props): React.JSX.Ele
   const [text, setText] = useState(initial);
   const [busy, setBusy] = useState(false);
 
-  const save = async (): Promise<void> => {
+  const save = async (value = text): Promise<void> => {
     if (busy) return;
-    if (text.trim() === initial.trim()) return onCancel();
-    if (!text.trim()) return;
+    // Unchanged content keeps the original spelling of its markdown.
+    if (value.trim() === initial.trim()) return onCancel();
+    if (!value.trim()) return;
     setBusy(true);
     try {
-      if (await onSave(text)) onCancel();
+      if (await onSave(value)) onCancel();
     } finally {
       setBusy(false);
     }
@@ -25,28 +27,11 @@ export function PointEditor({ initial, onSave, onCancel }: Props): React.JSX.Ele
 
   return (
     <div className="point-editor">
-      <textarea
-        className="point-editor-input"
-        aria-label="Edit point"
-        autoFocus
-        rows={Math.min(10, Math.max(2, text.split('\n').length))}
-        maxLength={4000}
-        value={text}
-        onFocus={(e) => e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length)}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          const inFence = ((text.match(/^\s*```/gm) ?? []).length % 2) === 1;
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            onCancel();
-          } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !inFence) {
-            e.preventDefault();
-            void save();
-          }
-        }}
-      />
+      <div className="composer editing">
+        <RichEditor label="Edit point" initial={initial} autoFocus onChange={setText} onSubmit={(md) => void save(md)} onEscape={onCancel} />
+      </div>
       <div className="point-editor-actions">
-        <span className="muted small">Notes show the new text; the point keeps its ID and date.</span>
+        <span className="muted small">Keeps its ID and date.</span>
         <button className="btn" onClick={onCancel}>
           Cancel
         </button>

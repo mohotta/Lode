@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { JobView } from '@shared/ipc';
 import type {
   BacklogDay,
@@ -10,23 +10,24 @@ import type {
   TrashItem,
   VaultInfo,
 } from '@shared/types';
-import { lode, unwrap } from './api';
+import { ask, lode, unwrap } from './api';
 import { BacklogView } from './components/BacklogView';
 import { DigestPicker } from './components/DigestPicker';
 import { GenerateDialog, type DialogTarget } from './components/GenerateDialog';
 import { SettingsView } from './components/SettingsView';
 import { Scratchpad, type DuplicateInfo } from './components/Scratchpad';
+import type { RichEditorHandle } from './components/RichEditor';
 import { Sidebar } from './components/Sidebar';
 import { ReviewView } from './components/ReviewView';
 import { SearchView } from './components/SearchView';
 import { StatusBar } from './components/StatusBar';
 import { TrashView } from './components/TrashView';
-import { CloseIcon, SparkIcon, VaultIcon } from './components/Icons';
+import { CloseIcon } from './components/Icons';
 import { DIGEST_PREFIX, NotePane } from './components/NotePane';
 import { isActive } from './jobs';
 import { Resizer } from './components/Resizer';
 import { BACKLOG, NOTE_MIN, SIDEBAR, usePaneWidths } from './layout';
-import { useTheme } from './theme';
+import { useAccent, useTheme } from './theme';
 
 type Page = 'main' | 'settings' | 'trash' | 'review' | 'search';
 
@@ -85,8 +86,9 @@ export function App(): React.JSX.Element {
   const [query, setQuery] = useState('');
   /** A point to scroll to once its folder has loaded (set by handlers, consumed after load). */
   const pendingJump = useRef<string | null>(null);
-  const scratchRef = useRef<HTMLTextAreaElement>(null);
+  const scratchRef = useRef<RichEditorHandle>(null);
   const [theme, setTheme] = useTheme();
+  const [accent, setAccent] = useAccent();
   const [widths, setWidths] = usePaneWidths();
 
   const place = history.items[history.i];
@@ -221,6 +223,26 @@ export function App(): React.JSX.Element {
         setPage('search');
         return;
       }
+      // Single-key shortcuts, only when no field or menu has focus: n new point, j/k move through points.
+      const t = e.target as HTMLElement | null;
+      const typing = !!t?.closest('input, textarea, select, [contenteditable="true"], [role="menu"], dialog');
+      if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === 'n') {
+          e.preventDefault();
+          scratchRef.current?.focus();
+          return;
+        }
+        if (e.key === 'j' || e.key === 'k') {
+          const rows = [...document.querySelectorAll<HTMLElement>('.point-row')];
+          if (rows.length === 0) return;
+          const at = rows.indexOf(document.activeElement as HTMLElement);
+          const next = rows[Math.min(rows.length - 1, Math.max(0, at === -1 ? 0 : at + (e.key === 'j' ? 1 : -1)))];
+          e.preventDefault();
+          next?.focus();
+          next?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
+      }
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       if (e.key === 'ArrowLeft') step(-1);
       else if (e.key === 'ArrowRight') step(1);
@@ -312,7 +334,12 @@ export function App(): React.JSX.Element {
 
   const deleteNote = async (slug: string, title: string): Promise<void> => {
     if (!vaultId || !folder) return;
-    if (!confirm(`Move "${title}" to the trash? Its points become unfiled again. You can restore it from Trash.`)) return;
+    const ok = await ask({
+      message: `Move "${title}" to the trash?`,
+      detail: 'Its points become unfiled again. You can restore it from Trash.',
+      confirmLabel: 'Move to trash',
+    });
+    if (!ok) return;
     await guard(async () => {
       await unwrap(lode.notes.delete(vaultId, folder, slug));
       setHistory((h) => rewrite(h, (p) => (p.folder === folder && p.subtopic === slug ? { folder, subtopic: null } : p)));
@@ -328,6 +355,11 @@ export function App(): React.JSX.Element {
   };
 
   const folderInfo = folders.find((f) => f.slug === folder);
+  /** Point ID → the notes it is filed in, for the reader's "Also in" links. */
+  const filedIn = useMemo(
+    () => new Map(days.flatMap((d) => d.points).map((pt) => [pt.id, pt.filedUnder] as const)),
+    [days],
+  );
   const allPoints = days.flatMap((d) => d.points).filter((pt) => !pt.deleted);
   const unfiled = allPoints.filter((pt) => pt.filedUnder.length === 0).length;
   const vaultJobs = jobs.filter((j) => j.vaultId === vaultId);
@@ -351,7 +383,13 @@ export function App(): React.JSX.Element {
 
   const deleteDigest = async (id: string, title: string): Promise<void> => {
     if (!vaultId || !folder) return;
-    if (!confirm(`Delete the digest "${title}"? Your points are not affected; you can write it again.`)) return;
+    const ok = await ask({
+      message: `Delete the digest "${title}"?`,
+      detail: 'Your points are not affected; you can write it again.',
+      confirmLabel: 'Delete digest',
+      danger: true,
+    });
+    if (!ok) return;
     await guard(async () => {
       await unwrap(lode.digest.delete(vaultId, folder, id));
       const key = `${DIGEST_PREFIX}${id}`;
@@ -490,7 +528,7 @@ export function App(): React.JSX.Element {
 
       {page === 'settings' ? (
         <main className="settings-page" aria-label="Settings">
-          <SettingsView onClose={() => setPage('main')} />
+          <SettingsView onClose={() => setPage('main')} accent={accent} onAccent={setAccent} />
         </main>
       ) : page === 'review' && vaultId ? (
         <main className="settings-page" aria-label="Review">
@@ -554,24 +592,20 @@ export function App(): React.JSX.Element {
                 <header className="pane-bar">
                   <div className="pane-title">
                     <h1>{folderInfo.title}</h1>
-                    <span className="pane-sub">
-                      {allPoints.length} {allPoints.length === 1 ? 'point' : 'points'}
-                      {unfiled > 0 && ` · ${unfiled} unfiled`}
-                    </span>
+                    {unfiled > 0 && <span className="pane-sub">{unfiled} unfiled</span>}
                   </div>
                   {genJob ? (
-                    <button className="btn accent" onClick={() => setDialog({ kind: 'job', jobId: genJob.id })}>
+                    <button className="btn" onClick={() => setDialog({ kind: 'job', jobId: genJob.id })}>
                       <span className="spinner small" aria-hidden="true" />
                       {genJob.status === 'queued' ? 'Queued' : 'Generating…'}
                     </button>
                   ) : (
                     <button
-                      className="btn accent"
+                      className="btn"
                       onClick={() => setDialog({ kind: 'new', folder, folderTitle: folderInfo.title })}
                       disabled={unfiled === 0}
                       title={unfiled ? 'Organise unfiled points into subtopic notes' : 'Every point is filed'}
                     >
-                      <SparkIcon size={14} />
                       Generate
                     </button>
                   )}
@@ -597,9 +631,6 @@ export function App(): React.JSX.Element {
               </>
             ) : (
               <div className="welcome">
-                <div className="welcome-mark" aria-hidden="true">
-                  <VaultIcon size={22} />
-                </div>
                 <h1>Lode</h1>
                 <p>
                   {vaults.length === 0
@@ -637,6 +668,7 @@ export function App(): React.JSX.Element {
             onEditPoint={editPoint}
             onSetPointDeleted={setPointDeleted}
             digests={digests}
+            filedIn={filedIn}
             onNewDigest={() => setPickingDigest(true)}
             onRegenerateDigest={openDigestDialog}
             onDeleteDigest={(id, title) => void deleteDigest(id, title)}

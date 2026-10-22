@@ -38,7 +38,7 @@ export async function launch(
       '--password-store=basic',
       ...(process.env.CI && process.getuid?.() === 0 ? ['--no-sandbox'] : []),
     ],
-    env: { ...process.env, LODE_USER_DATA: userData, ELECTRON_RENDERER_URL: '', ...extraEnv } as Record<string, string>,
+    env: { ...process.env, LODE_USER_DATA: userData, LODE_E2E_AUTO_CONFIRM: '1', ELECTRON_RENDERER_URL: '', ...extraEnv } as Record<string, string>,
   });
   const page = await app.firstWindow();
   await page.waitForLoadState('domcontentloaded');

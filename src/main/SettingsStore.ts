@@ -25,6 +25,8 @@ export const AppSettingsSchema = z.object({
   generation: GenerationSettingsSchema.default(() => GenerationSettingsSchema.parse({})),
   /** Linux without a keyring: user explicitly accepts basic (obfuscated) key storage. */
   allowWeakKeyStorage: z.boolean().default(false),
+  /** Chromium zoom level (0 = 100%); Ctrl +/-/0 change it. */
+  zoomLevel: z.number().min(-3).max(5).default(0),
 });
 
 export type LlmSettings = z.infer<typeof LlmSettingsSchema>;
