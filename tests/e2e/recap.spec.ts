@@ -50,7 +50,7 @@ test.afterEach(async () => {
   await removeDir(l.userData);
 });
 
-test('review, search, My points only and a weekly digest', async () => {
+test('review, search, Only mine and a weekly digest', async () => {
   const { page, vaultRoot } = l;
   const before = await hashBacklogs(vaultRoot);
 
@@ -84,13 +84,13 @@ test('review, search, My points only and a weekly digest', async () => {
   const noteHeading = page.getByRole('heading', { level: 2, name: 'Services' });
   await expect(noteHeading).toBeVisible();
 
-  // --- My points only hides AI blocks but keeps the user's highlighted point.
+  // --- Only mine hides AI blocks but keeps the user's highlighted point.
   const note = page.getByRole('region', { name: 'Services' });
   await expect(note.getByRole('article', { name: 'AI-generated explanation' })).toHaveCount(1);
-  await page.getByRole('button', { name: 'My points', exact: true }).click();
+  await page.getByRole('button', { name: 'Only mine', exact: true }).click();
   await expect(note.getByRole('article', { name: 'AI-generated explanation' })).toHaveCount(0);
   await expect(note.getByRole('article', { name: /Your point from/ })).toHaveCount(1);
-  await page.getByRole('button', { name: 'My points', exact: true }).click();
+  await page.getByRole('button', { name: 'All', exact: true }).click();
 
   // --- Keys, then a weekly digest through the background queue.
   await page.getByRole('button', { name: 'Settings' }).click();

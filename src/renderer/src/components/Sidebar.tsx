@@ -100,28 +100,28 @@ export function Sidebar(p: Props): React.JSX.Element {
             { label: 'Open or create a vault…', icon: <PlusIcon size={14} />, onSelect: p.onOpenVault },
           ]}
         />
-        {vault && (
-          <button
-            className={`icon-btn ${p.searchOpen ? 'selected' : ''}`}
-            aria-label="Search"
-            title="Search points and notes (Ctrl+K)"
-            onClick={p.onOpenSearch}
-          >
-            <SearchIcon size={15} />
-          </button>
-        )}
       </div>
 
       <div className="sidebar-scroll">
         {vault ? (
           <>
+            <button
+              className={`side-search ${p.searchOpen ? 'selected' : ''}`}
+              aria-label="Search"
+              title="Search points and notes (Ctrl+K)"
+              onClick={p.onOpenSearch}
+            >
+              <SearchIcon size={15} />
+              <span className="side-search-label">Search</span>
+              <kbd>Ctrl K</kbd>
+            </button>
             <div className="nav-items">
               <button className={`tree-item ${p.reviewOpen ? 'selected' : ''}`} onClick={p.onOpenReview}>
                 <ReviewIcon size={15} className="tree-icon" />
                 <span className="tree-label">Review</span>
                 {p.reviewCount > 0 && (
                   <span className="tree-count due" aria-label={`${p.reviewCount} due`}>
-                    {p.reviewCount}
+                    {p.reviewCount} due
                   </span>
                 )}
               </button>

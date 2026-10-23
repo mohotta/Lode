@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { JobView } from '@shared/ipc';
 import type { DigestInfo, ResolvedNote, SubtopicInfo } from '@shared/types';
 import { lode, unwrap } from '../api';
 import { dayMonth } from '../dates';
-import { host, LlmBlock, PointBlock, RawBlock } from './Blocks';
+import { host, LlmBlock, PointBlock, RawBlock, type LlmB } from './Blocks';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -19,6 +19,7 @@ import {
   TrashIcon,
   UndoIcon,
 } from './Icons';
+import { CiteContext } from './Markdown';
 import { Menu } from './Menu';
 
 interface Props {
@@ -67,7 +68,7 @@ function loadLayout(): 'cards' | 'list' {
   }
 }
 
-/** Per-device convenience: remembers the My points only toggle. */
+/** Per-device convenience: remembers the All / Only mine choice. */
 function loadMineOnly(): boolean {
   try {
     return localStorage.getItem(MINE_ONLY_KEY) === '1';
@@ -99,8 +100,7 @@ export function NotePane(p: Props): React.JSX.Element {
       // Storage unavailable: the choice just won't persist.
     }
   };
-  const toggleMineOnly = (): void => {
-    const next = !mineOnly;
+  const chooseMineOnly = (next: boolean): void => {
     setMineOnly(next);
     try {
       localStorage.setItem(MINE_ONLY_KEY, next ? '1' : '0');
@@ -136,6 +136,49 @@ export function NotePane(p: Props): React.JSX.Element {
       (shown?.blocks ?? []).flatMap((b) => (b.kind === 'llm' ? b.sources.map((x) => [x.url, x] as const) : [])),
     ).values(),
   ];
+  const sourceKey = sources.map((x) => x.url).join('\n');
+  const cites = useMemo(() => new Map(sourceKey ? sourceKey.split('\n').map((u, i) => [u, i + 1]) : []), [sourceKey]);
+  // Corrections render inside the card of the point they are about, when that point is shown.
+  const shownPoints = new Set(
+    (shown?.blocks ?? []).flatMap((b) => (b.kind === 'point' && !b.missing && !b.deleted && !b.duplicateOf ? [b.id] : [])),
+  );
+  const fixes = new Map<string, LlmB[]>();
+  for (const b of shown?.blocks ?? []) {
+    if (b.kind === 'llm' && b.correctionFor && shownPoints.has(b.correctionFor)) {
+      fixes.set(b.correctionFor, [...(fixes.get(b.correctionFor) ?? []), b]);
+    }
+  }
+
+  // Outline: the point nearest the top of the reading area is marked as the current one.
+  const scroller = useRef<HTMLDivElement>(null);
+  const [current, setCurrent] = useState<string | null>(null);
+  const outlineKey = outlinePoints.map((x) => x.id).join(',');
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || !outlineKey) return;
+    const ids = outlineKey.split(',');
+    let frame = 0;
+    const update = (): void => {
+      frame = 0;
+      const line = el.getBoundingClientRect().top + 120;
+      let at = ids[0] ?? null;
+      for (const id of ids) {
+        const top = document.getElementById(`np-${id}`)?.getBoundingClientRect().top;
+        if (top !== undefined && top <= line) at = id;
+      }
+      setCurrent(at);
+    };
+    const onScroll = (): void => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, [outlineKey, mineOnly]);
+
   const alsoIn = isDigest
     ? []
     : [...new Set(outlinePoints.flatMap((pt) => p.filedIn.get(pt.id) ?? []))]
@@ -182,19 +225,24 @@ export function NotePane(p: Props): React.JSX.Element {
         </div>
         {shown && (
           <div className="note-actions">
+            <div className="seg" role="group" aria-label="Show">
+              {([false, true] as const).map((v) => (
+                <button
+                  key={String(v)}
+                  aria-pressed={mineOnly === v}
+                  className={mineOnly === v ? 'on' : ''}
+                  title={v ? 'Hide generated text and show only your own points' : 'Your points with generated context'}
+                  onClick={() => chooseMineOnly(v)}
+                >
+                  {v ? 'Only mine' : 'All'}
+                </button>
+              ))}
+            </div>
             {shown.updated && !isDigest && (
               <span className="updated" title={new Date(shown.updated).toLocaleString()}>
                 Updated {dayMonth(shown.updated)}
               </span>
             )}
-            <button
-              className={`btn toggle ${mineOnly ? 'on' : ''}`}
-              aria-pressed={mineOnly}
-              onClick={toggleMineOnly}
-              title="Hide generated sections and show only your own points"
-            >
-              My points
-            </button>
             {p.regenJob && (
               <button className="btn" onClick={() => p.regenJob && p.onOpenJob(p.regenJob.id)}>
                 <span className="spinner small" aria-hidden="true" />
@@ -254,7 +302,7 @@ export function NotePane(p: Props): React.JSX.Element {
         )}
       </div>
 
-      <div className="note-scroll">
+      <div className="note-scroll" ref={scroller}>
         {shown ? (
           <div className="reader">
             <section className="note" aria-labelledby="note-title">
@@ -268,23 +316,28 @@ export function NotePane(p: Props): React.JSX.Element {
                   {mineOnly && ai > 0 && 'Generated sections hidden'}
                 </p>
               )}
-              <div className="blocks">
-                {shown.blocks.filter((b) => !mineOnly || b.kind !== 'llm').map((b, i) =>
-                  b.kind === 'point' ? (
-                    <PointBlock
-                      key={`${b.id}-${i}`}
-                      block={b}
-                      onJump={p.onJumpToPoint}
-                      onEdit={p.onEditPoint}
-                      onSetDeleted={p.onSetPointDeleted}
-                    />
-                  ) : b.kind === 'llm' ? (
-                    <LlmBlock key={`${b.id}-${i}`} block={b} />
-                  ) : (
-                    <RawBlock key={`raw-${i}`} text={b.text} />
-                  ),
-                )}
-              </div>
+              <CiteContext.Provider value={cites}>
+                <div className="blocks">
+                  {shown.blocks
+                    .filter((b) => !(b.kind === 'llm' && (mineOnly || (b.correctionFor && shownPoints.has(b.correctionFor)))))
+                    .map((b, i) =>
+                      b.kind === 'point' ? (
+                        <PointBlock
+                          key={`${b.id}-${i}`}
+                          block={b}
+                          fixes={mineOnly ? [] : fixes.get(b.id)}
+                          onJump={p.onJumpToPoint}
+                          onEdit={p.onEditPoint}
+                          onSetDeleted={p.onSetPointDeleted}
+                        />
+                      ) : b.kind === 'llm' ? (
+                        <LlmBlock key={`${b.id}-${i}`} block={b} />
+                      ) : (
+                        <RawBlock key={`raw-${i}`} text={b.text} />
+                      ),
+                    )}
+                </div>
+              </CiteContext.Provider>
             </section>
             <nav className="outline" aria-label="Outline">
               {outlinePoints.length > 0 && (
@@ -294,7 +347,8 @@ export function NotePane(p: Props): React.JSX.Element {
                     {outlinePoints.map((pt) => (
                       <li key={pt.id}>
                         <button
-                          className="outline-link"
+                          className={`outline-link point-link ${current === pt.id ? 'current' : ''}`}
+                          aria-current={current === pt.id ? 'location' : undefined}
                           title={pt.text}
                           onClick={() => document.getElementById(`np-${pt.id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
                         >
@@ -322,15 +376,16 @@ export function NotePane(p: Props): React.JSX.Element {
               {sources.length > 0 && (
                 <>
                   <h3 className="outline-head">Sources</h3>
-                  <ul role="list">
-                    {sources.map((x) => (
+                  <ol className="source-list">
+                    {sources.map((x, i) => (
                       <li key={x.url}>
+                        <span className="source-n">{i + 1}</span>
                         <button className="outline-link" title={x.url} onClick={() => void lode.link.open(x.url)}>
                           {x.title || host(x.url)}
                         </button>
                       </li>
                     ))}
-                  </ul>
+                  </ol>
                 </>
               )}
             </nav>

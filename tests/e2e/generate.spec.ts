@@ -125,28 +125,27 @@ test('BYOK settings, generate with search, highlighted user points vs AI blocks'
   await expect(mine.nth(2).locator('pre code')).toHaveText('kubectl expose deploy web --port 80');
   await expect(mine.nth(2).locator('code').first()).toHaveText('kubectl expose');
 
-  // Correction: separate AI note under the untouched point, flagged with icon + label.
+  // Correction: shown inside the untouched point's card, with an arrow and a "Correction" label.
   const fixed = mine.filter({ hasText: 'kube-proxy IPVS mode scales better' });
-  await expect(fixed).toContainText('Needs a fix');
-  const correction = note.getByRole('complementary', { name: 'AI correction for your point above' });
+  const correction = fixed.getByRole('complementary', { name: 'AI correction for your point above' });
   await expect(correction).toHaveCount(1);
-  await expect(correction).toContainText('Correction');
-  await expect(correction).toContainText('small clusters see little difference');
-  await expect(correction).toHaveCSS('border-left-style', 'dashed');
+  await expect(correction).toContainText('Correction — Its advantage shows with thousands of Services');
+  await expect(correction.getByRole('link', { name: /^Source 1/ })).toHaveText('1');
   await expect(page.getByLabel('Backlog', { exact: true }).getByText('needs a fix')).toHaveCount(1);
   // Margin label: the point's date (its title says "Your point").
   await expect(mine.first().locator('.margin-mark .point-date')).toHaveAttribute('title', /^Your point/);
   await expect(mine.first()).toContainText('ClusterIP services are only reachable inside the cluster');
-  // Distinct by shape too, not just colour: solid callout rule for points, dotted rule for AI.
-  await expect(mine.first()).toHaveCSS('border-left-width', '2px');
-  await expect(mine.first()).toHaveCSS('border-left-style', 'solid');
+  // Distinct by shape too, not just colour: points are cards, AI text has no box.
+  await expect(mine.first().locator('.point-card')).toHaveCSS('border-top-style', 'solid');
 
   const ai = note.getByRole('article', { name: 'AI-generated explanation' });
   await expect(ai).toHaveCount(1);
-  await expect(ai).toHaveCSS('border-left-style', 'dotted');
-  await expect(ai).toContainText('generated');
+  await expect(ai.locator('.llm-body')).toHaveCSS('border-top-style', 'none');
+  await expect(ai.locator('.margin-mark')).toHaveText('Context');
   await expect(ai.locator('strong')).toHaveText('Service');
-  await expect(ai.getByRole('button', { name: /kubernetes\.io/ })).toBeVisible();
+  // Trailing source links become numbers matching the outline's Sources list (one URL here).
+  await expect(ai.getByRole('link', { name: /^Source 1/ })).toHaveText('1');
+  await expect(ai.getByRole('link', { name: /^Source 1/ })).toHaveAttribute('href', CITED_URL);
   await expect(ai).not.toContainText('made up');
 
   // Backlog shows filing status now.

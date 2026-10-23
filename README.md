@@ -26,8 +26,8 @@ Everything is plain markdown in a folder you pick. There is no account, no serve
 
 - **Fast capture.** One input per folder; Enter adds a point. Code fences, inline code and lists render as markdown. Backfill a past day with the date chip.
 - **LLM-organised notes.** Generate files unfiled points into existing or new subtopics, with a short explanation and sourced extras for each group.
-- **Your points, untouched.** Notes store `{{point:id}}` markers, never copies of your text. Your points are the main text with a solid rule and their date in the margin; AI text is muted prose with a dotted rule and a "generated" label.
-- **Corrections, not rewrites.** If a point is wrong, a separate sourced correction appears under it and the point is marked *Needs a fix*. Your text stays as you wrote it.
+- **Your points, untouched.** Notes store `{{point:id}}` markers, never copies of your text. Your points are cards with their date beside them; AI text is muted prose marked *Context*, with numbered citations listed beside the note.
+- **Corrections, not rewrites.** If a point is wrong, a separate sourced correction appears inside its card (and the point is marked *needs a fix* in the backlog). Your text stays as you wrote it.
 - **Verifiable sources.** With web search on (Tavily), every added fact must cite a URL from that run's search results; anything else is dropped or marked unsourced.
 - **Works in the background.** Generate, Regenerate and digests queue in a status bar while you keep capturing.
 - **Recap.** *Review* resurfaces points from about a day, a week and a month ago. *Search* (Ctrl+K) covers points and notes, listed apart. *Digests* write a weekly or monthly recap. *My points* hides the AI text.

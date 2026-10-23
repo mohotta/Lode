@@ -78,6 +78,16 @@ export const Scratchpad = forwardRef<RichEditorHandle, Props>(function Scratchpa
           }}
           onSubmit={(md) => void submit(md)}
         />
+        <button
+          type="button"
+          className="btn primary composer-add"
+          disabled={!text.trim() || busy}
+          // Keep focus in the editor so the toolbar doesn't hide mid-click.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => void submit()}
+        >
+          Add point
+        </button>
       </div>
 
       {dup && (
