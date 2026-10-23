@@ -49,17 +49,16 @@ test('Ctrl = zooms in, Ctrl - zooms out, Ctrl 0 resets, and the level is saved',
   const { app, userData } = l;
   const zoom = (): Promise<number> =>
     app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.getZoomLevel());
-  // Real input events (Playwright's synthetic keys skip Electron's before-input-event). They only
-  // reach a focused window, and CI's display has no window manager, so focus it explicitly.
-  const press = (keyCode: string): Promise<void> =>
+  // Drives the window's real before-input-event handler with the input a key press produces.
+  // OS-level key events are unreliable on CI's virtual display (no window manager, so no
+  // reliable focus); the key mapping itself is unit-tested in tests/unit/zoom.test.ts.
+  const press = (key: string): Promise<void> =>
     app.evaluate(({ BrowserWindow }, k) => {
-      const win = BrowserWindow.getAllWindows()[0]!;
-      win.focus();
-      const wc = win.webContents;
-      wc.focus();
-      wc.sendInputEvent({ type: 'keyDown', keyCode: k, modifiers: ['control'] });
-      wc.sendInputEvent({ type: 'keyUp', keyCode: k, modifiers: ['control'] });
-    }, keyCode);
+      const wc = BrowserWindow.getAllWindows()[0]!.webContents;
+      const code = k === '=' ? 'Equal' : k === '-' ? 'Minus' : 'Digit0';
+      const input = { type: 'keyDown', key: k, code, control: true, meta: false, alt: false, shift: false };
+      wc.emit('before-input-event', { preventDefault: () => undefined }, input);
+    }, key);
   await press('=');
   await expect.poll(zoom).toBe(0.5);
   await press('=');
