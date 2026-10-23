@@ -902,13 +902,15 @@ kbd {
 /* Reading column plus the outline rail. Blocks are a 64px label column (date or Context pill) and the content. */
 .reader {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(180px, 18%, 240px);
+  grid-template-columns: minmax(0, 1fr) clamp(200px, 22%, 290px);
   gap: 56px;
-  max-width: 1200px;
+  max-width: 1280px;
+  margin: 0 auto;
   padding: 16px 8px 0;
 }
 .overview {
   max-width: 1100px;
+  margin: 0 auto;
 }
 .note-title {
   margin: 0 0 40px 84px;
@@ -1213,11 +1215,11 @@ kbd {
   align-self: start;
   max-height: calc(100vh - 140px);
   overflow: auto;
-  font-size: 13px;
+  font-size: 14px;
 }
 .outline-head {
   margin: 0 0 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 400;
   color: var(--text-3);
 }
@@ -1234,7 +1236,7 @@ kbd {
   border: 0;
   background: none;
   color: var(--text-2);
-  font-size: 13.5px;
+  font-size: 14px;
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1269,8 +1271,8 @@ kbd {
 }
 .source-n {
   flex: none;
-  min-width: 12px;
-  font: 12px var(--mono);
+  min-width: 14px;
+  font: 12.5px var(--mono);
   color: var(--text-3);
 }
 @container (max-width: 760px) {
