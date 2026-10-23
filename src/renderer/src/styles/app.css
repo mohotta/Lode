@@ -3035,6 +3035,11 @@ select.set-input {
   margin: 0 auto;
   padding: 40px 24px 80px;
 }
+/* Review and Trash use most of the page width. */
+.page-body.wide {
+  max-width: 1160px;
+  padding-inline: 40px;
+}
 .page-intro {
   display: flex;
   flex-wrap: wrap;
@@ -3393,4 +3398,49 @@ select.set-input {
   .search-preview {
     display: none;
   }
+}
+
+/* ---------- Confirmation dialog (in-app, themed) ---------- */
+.dialog.confirm {
+  width: min(440px, calc(100vw - 32px));
+  padding: 20px 20px 16px;
+  background: var(--card);
+  border-color: var(--card-line);
+}
+.confirm-body {
+  display: flex;
+  gap: 12px;
+}
+.confirm-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--fix) 14%, transparent);
+  color: var(--fix);
+}
+.dialog.confirm h2 {
+  margin: 4px 0 6px;
+  font-size: 16px;
+  line-height: 1.35;
+}
+.dialog.confirm p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.dialog.confirm .dialog-actions {
+  margin-top: 20px;
+}
+.btn.danger-fill {
+  border-color: transparent;
+  background: var(--fix);
+  color: #ffffff;
+  font-weight: 600;
+}
+.btn.danger-fill:hover:not(:disabled) {
+  border-color: transparent;
+  opacity: 0.9;
 }

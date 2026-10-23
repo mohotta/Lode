@@ -12,6 +12,7 @@ import type {
 } from '@shared/types';
 import { ask, lode, unwrap } from './api';
 import { BacklogView } from './components/BacklogView';
+import { ConfirmHost } from './components/ConfirmHost';
 import { DigestPicker } from './components/DigestPicker';
 import { GenerateDialog, type DialogTarget } from './components/GenerateDialog';
 import { SettingsView } from './components/SettingsView';
@@ -696,6 +697,8 @@ export function App(): React.JSX.Element {
         onCancel={(id) => void lode.generate.cancel(id)}
         onDismiss={(id) => void lode.generate.dismiss(id)}
       />
+
+      <ConfirmHost />
 
       {searchOpen && vaultId && (
         <SearchView

@@ -79,12 +79,12 @@ deleted: []
   with a code block:
   \`\`\`
   kubectl get pods
-  \`\`\`
-  ^p-bbbbbbbb
+  \`\`\` ^p-bbbbbbbb
 - Third point ^p-cccccccc
 `;
 
   it('removes a multi-line entry and its tombstone; other entries keep their bytes', () => {
+    expect(parseBacklog(MULTI, '2026-10-17').entries.map((e) => e.id)).toEqual(['p-aaaaaaaa', 'p-bbbbbbbb', 'p-cccccccc']);
     const disabled = setTombstone(MULTI, '2026-10-17', 'p-bbbbbbbb', true);
     const out = removeEntry(disabled, '2026-10-17', 'p-bbbbbbbb');
     const f = parseBacklog(out, '2026-10-17');

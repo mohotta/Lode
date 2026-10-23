@@ -93,7 +93,8 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   await temp.getByRole('button', { name: 'Point actions' }).click();
   await page.getByRole('menuitem', { name: 'Disable' }).click();
   await temp.getByRole('button', { name: 'Point actions' }).click();
-  await page.getByRole('menuitem', { name: 'Delete permanently…' }).click(); // native confirm auto-accepts in e2e
+  await page.getByRole('menuitem', { name: 'Delete permanently…' }).click();
+  await page.getByRole('dialog', { name: 'Delete this point permanently?' }).getByRole('button', { name: 'Delete permanently' }).click();
   await expect(temp).toHaveCount(0);
   await expect(rows).toHaveCount(3);
   expect(await readFile(dayFile, 'utf8')).not.toContain('A throwaway note to delete');
@@ -147,6 +148,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   // --- Move the note to trash: its points become unfiled; restore it from Trash.
   await page.getByRole('button', { name: 'Note actions' }).click();
   await page.getByRole('menuitem', { name: 'Move to trash' }).click();
+  await page.getByRole('dialog', { name: /to the trash\?$/ }).getByRole('button', { name: 'Move to trash' }).click();
   await expect(noteHeading).toHaveCount(0);
   await expect(backlog.getByText('unfiled')).toHaveCount(3);
   await page.getByRole('button', { name: /^Trash, 1 item/ }).click();
@@ -161,6 +163,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   // --- Delete the folder, then restore it.
   await page.getByRole('button', { name: 'Actions for Kubernetes' }).click();
   await page.getByRole('menuitem', { name: 'Move to trash' }).click();
+  await page.getByRole('dialog', { name: 'Move "Kubernetes" to the trash?' }).getByRole('button', { name: 'Move to trash' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Kubernetes' })).toHaveCount(0);
   await page.getByRole('button', { name: /^Trash, 1 item/ }).click();
   await trash.getByRole('button', { name: 'Restore Kubernetes' }).click();

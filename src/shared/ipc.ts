@@ -68,12 +68,6 @@ export const Schemas = {
   'digest:read': z.object({ vaultId, folder: slug, digest: digestId }),
   'digest:delete': z.object({ vaultId, folder: slug, digest: digestId }),
   'link:open': z.object({ url: z.string().url().max(2048) }),
-  'ui:confirm': z.object({
-    message: z.string().min(1).max(300),
-    detail: z.string().max(1000).optional(),
-    confirmLabel: z.string().min(1).max(40),
-    danger: z.boolean().optional(),
-  }),
   'settings:get': z.object({}),
   'settings:set': z.object({
     allowWeakKeyStorage: z.boolean().optional(),

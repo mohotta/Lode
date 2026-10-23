@@ -4,17 +4,26 @@ export const lode = window.lode;
 
 export class ApiError extends Error {}
 
+export interface AskOptions {
+  message: string;
+  detail?: string;
+  confirmLabel: string;
+  danger?: boolean;
+}
+
+let opener: ((opts: AskOptions) => Promise<boolean>) | null = null;
+
+/** Registered by `ConfirmHost` when it mounts. */
+export function setConfirmOpener(fn: ((opts: AskOptions) => Promise<boolean>) | null): void {
+  opener = fn;
+}
+
 /**
- * Asks with a native OS dialog. Falls back to the browser confirm if the native call is missing
- * or fails (e.g. a dev session whose preload predates the channel), so the action never silently stops.
+ * Asks with the app's own confirmation dialog (`ConfirmHost`). Falls back to the browser confirm
+ * if the host isn't mounted, so an action never silently stops.
  */
-export async function ask(opts: { message: string; detail?: string; confirmLabel: string; danger?: boolean }): Promise<boolean> {
-  try {
-    const r = await lode.ui.confirm(opts);
-    if (r.ok) return r.value;
-  } catch {
-    // Fall through to the in-page confirm.
-  }
+export async function ask(opts: AskOptions): Promise<boolean> {
+  if (opener) return opener(opts);
   return confirm([opts.message, opts.detail].filter(Boolean).join('\n\n'));
 }
 

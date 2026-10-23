@@ -24,7 +24,7 @@ export function ReviewView({ items, onMark, onOpenNote, onShowPoint, onClose }: 
   return (
     <div className="settings-v2">
       <PageHeader icon={<ReviewIcon size={16} />} title="Review" closeLabel="Close review" onClose={onClose} />
-      <div className="page-body">
+      <div className="page-body wide">
         <div className="page-intro">
           <div>
             <h2>{items.length === 0 ? 'Nothing to review' : items.length === 1 ? '1 point to review' : `${items.length} points to review`}</h2>

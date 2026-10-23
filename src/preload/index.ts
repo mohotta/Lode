@@ -61,9 +61,6 @@ const api: LodeApi = {
   link: {
     open: (url) => call('link:open')({ url }),
   },
-  ui: {
-    confirm: (opts) => call('ui:confirm')(opts),
-  },
   settings: {
     get: () => call('settings:get')(),
     set: (patch) => call('settings:set')(patch),

@@ -22,7 +22,7 @@ export function TrashView({ items, folders, onRestore, onPurge, onClose }: Props
   return (
     <div className="settings-v2">
       <PageHeader icon={<TrashIcon size={16} />} title="Trash" closeLabel="Close trash" onClose={onClose} />
-      <div className="page-body">
+      <div className="page-body wide">
         <div className="page-intro">
           <div>
             <h2>{items.length === 1 ? '1 item in trash' : `${items.length} items in trash`}</h2>
