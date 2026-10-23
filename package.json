@@ -1,6 +1,6 @@
 {
   "name": "lode",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Local-first learning backlog that an LLM organises into subtopic notes, with your own points highlighted.",
   "author": {
