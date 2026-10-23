@@ -20,12 +20,13 @@ function isHttp(url: string): boolean {
   }
 }
 
-/** Ctrl/Cmd + "=" zooms in, "-" out, "0" resets (numpad keys too); the level is remembered in settings. */
+/**
+ * Ctrl/Cmd + "=" zooms in, "-" out, "0" resets (numpad keys too); the level is remembered in settings.
+ * The saved level is applied at window creation (webPreferences.zoomFactor), not after load, so it can
+ * never overwrite a zoom the user makes while the page is still loading.
+ */
 function enableZoom(win: BrowserWindow, settings: SettingsStore): void {
   const wc = win.webContents;
-  wc.on('did-finish-load', () => {
-    void settings.get().then((s) => wc.setZoomLevel(s.zoomLevel));
-  });
   wc.on('before-input-event', (event, input) => {
     const next = zoomFor(input, wc.getZoomLevel());
     if (next === null) return;
@@ -68,7 +69,7 @@ function enableContextMenu(win: BrowserWindow): void {
   });
 }
 
-function createWindow(settings: SettingsStore): BrowserWindow {
+function createWindow(settings: SettingsStore, zoomLevel: number): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -79,6 +80,8 @@ function createWindow(settings: SettingsStore): BrowserWindow {
     backgroundColor: '#16181d',
     autoHideMenuBar: true,
     webPreferences: {
+      // Chromium zoom levels are powers of 1.2.
+      zoomFactor: Math.pow(1.2, zoomLevel),
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
@@ -107,7 +110,7 @@ function createWindow(settings: SettingsStore): BrowserWindow {
   return win;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
 
   const settings = new SettingsStore(app.getPath('userData'));
@@ -117,9 +120,10 @@ app.whenReady().then(() => {
   registerSettingsHandlers(settings, keys, app.isPackaged);
   registerGenerateHandlers(registry, settings, keys);
 
-  createWindow(settings);
+  const { zoomLevel } = await settings.get();
+  createWindow(settings, zoomLevel);
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow(settings);
+    if (BrowserWindow.getAllWindows().length === 0) void settings.get().then((s) => createWindow(settings, s.zoomLevel));
   });
 });
 
