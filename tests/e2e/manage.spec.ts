@@ -155,7 +155,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   await page.screenshot({ path: 'test-results/trash-dark.png' });
   await trash.getByRole('button', { name: 'Restore Service networking & kube-proxy' }).click();
   await expect(page.getByText('Trash is empty')).toBeVisible();
-  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Close trash' }).click();
   await expect(backlog.getByText('unfiled')).toHaveCount(0);
 
   // --- Delete the folder, then restore it.
@@ -164,7 +164,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   await expect(page.getByRole('heading', { level: 1, name: 'Kubernetes' })).toHaveCount(0);
   await page.getByRole('button', { name: /^Trash, 1 item/ }).click();
   await trash.getByRole('button', { name: 'Restore Kubernetes' }).click();
-  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Close trash' }).click();
   await page.getByRole('button', { name: 'Kubernetes', exact: true }).click();
   await expect(rows).toHaveCount(3);
   expect(await hashBacklogs(vaultRoot)).toEqual(before);

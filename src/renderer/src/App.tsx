@@ -29,7 +29,7 @@ import { Resizer } from './components/Resizer';
 import { BACKLOG, NOTE_MIN, SIDEBAR, usePaneWidths } from './layout';
 import { useAccent, useTheme } from './theme';
 
-type Page = 'main' | 'settings' | 'trash' | 'review' | 'search';
+type Page = 'main' | 'settings' | 'trash' | 'review';
 
 /** One place the user has been: a folder, and optionally a note in it. Back/forward walk these. */
 interface Place {
@@ -84,12 +84,15 @@ export function App(): React.JSX.Element {
   const [trash, setTrash] = useState<TrashItem[]>([]);
   const [review, setReview] = useState<ReviewItem[]>([]);
   const [query, setQuery] = useState('');
+  // Search is an overlay above whatever page is open.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
   /** A point to scroll to once its folder has loaded (set by handlers, consumed after load). */
   const pendingJump = useRef<string | null>(null);
   const scratchRef = useRef<RichEditorHandle>(null);
   const [theme, setTheme] = useTheme();
-  // Stable, so Settings' Escape listener isn't re-registered on every render.
-  const closeSettings = useCallback(() => setPage('main'), []);
+  // Stable, so the pages' Escape listener isn't re-registered on every render.
+  const closePage = useCallback(() => setPage('main'), []);
   const [accent, setAccent] = useAccent();
   const [widths, setWidths] = usePaneWidths();
 
@@ -222,7 +225,7 @@ export function App(): React.JSX.Element {
     const onKey = (e: KeyboardEvent): void => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setPage('search');
+        setSearchOpen(true);
         return;
       }
       // Single-key shortcuts, only when no field or menu has focus: n new point, j/k move through points.
@@ -467,7 +470,7 @@ export function App(): React.JSX.Element {
         trashCount={trash.length}
         reviewOpen={page === 'review'}
         reviewCount={review.length}
-        searchOpen={page === 'search'}
+        searchOpen={searchOpen}
         resizer={
           <Resizer
             label="Resize sidebar"
@@ -482,7 +485,7 @@ export function App(): React.JSX.Element {
           setPage('review');
           if (vaultId) void loadReview(vaultId);
         }}
-        onOpenSearch={() => setPage('search')}
+        onOpenSearch={() => setSearchOpen(true)}
         theme={theme}
         onTheme={setTheme}
         onSelectVault={(id) => {
@@ -544,7 +547,7 @@ export function App(): React.JSX.Element {
       {page === 'settings' ? (
         <main className="settings-page" aria-label="Settings">
           <SettingsView
-            onClose={closeSettings}
+            onClose={closePage}
             accent={accent}
             onAccent={setAccent}
             theme={theme}
@@ -555,7 +558,7 @@ export function App(): React.JSX.Element {
         <main className="settings-page" aria-label="Review">
           <ReviewView
             items={review}
-            onClose={() => setPage('main')}
+            onClose={closePage}
             onShowPoint={showPoint}
             onOpenNote={(f, s) => navigate({ folder: f, subtopic: s })}
             onMark={async (items) => {
@@ -564,23 +567,12 @@ export function App(): React.JSX.Element {
             }}
           />
         </main>
-      ) : page === 'search' && vaultId ? (
-        <main className="settings-page" aria-label="Search">
-          <SearchView
-            vaultId={vaultId}
-            query={query}
-            onQuery={setQuery}
-            onClose={() => setPage('main')}
-            onOpenPoint={showPoint}
-            onOpenNote={(f, note, digest) => navigate({ folder: f, subtopic: digest ? `digest:${note}` : note })}
-          />
-        </main>
       ) : page === 'trash' ? (
         <main className="settings-page" aria-label="Trash">
           <TrashView
             items={trash}
             folders={folders}
-            onClose={() => setPage('main')}
+            onClose={closePage}
             onRestore={async (item) => {
               if (!vaultId) return;
               await guard(async () => {
@@ -704,6 +696,23 @@ export function App(): React.JSX.Element {
         onCancel={(id) => void lode.generate.cancel(id)}
         onDismiss={(id) => void lode.generate.dismiss(id)}
       />
+
+      {searchOpen && vaultId && (
+        <SearchView
+          vaultId={vaultId}
+          query={query}
+          onQuery={setQuery}
+          onClose={closeSearch}
+          onOpenPoint={(f, id) => {
+            setSearchOpen(false);
+            showPoint(f, id);
+          }}
+          onOpenNote={(f, note, digest) => {
+            setSearchOpen(false);
+            navigate({ folder: f, subtopic: digest ? `digest:${note}` : note });
+          }}
+        />
+      )}
 
       {pickingDigest && vaultId && folder && folderInfo && (
         <DigestPicker

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { KeyIdName, SettingsView as SV } from '@shared/ipc';
 import { lode, unwrap } from '../api';
 import { ACCENTS, type Accent, type ThemePref } from '../theme';
-import { CloseIcon, LockIcon, ShieldIcon, WarnIcon } from './Icons';
+import { LockIcon, ShieldIcon, WarnIcon } from './Icons';
+import { PageHeader } from './PageShell';
 
 interface Props {
   onClose(): void;
@@ -151,15 +152,6 @@ export function SettingsView(p: Props): React.JSX.Element {
     };
   }, []);
 
-  // Esc closes settings, unless a field inside is being edited with its own Escape meaning.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !e.defaultPrevented) onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   // Section list: the section nearest the top is marked as current.
   const loaded = !!s;
   useEffect(() => {
@@ -198,16 +190,7 @@ export function SettingsView(p: Props): React.JSX.Element {
 
   return (
     <div className="settings-v2" ref={root}>
-      <header className="set-head">
-        <div className="set-title">
-          <h1>Settings</h1>
-          <span className="muted">· changes save automatically</span>
-        </div>
-        <button className="btn set-close" aria-label="Close settings" title="Close (Esc)" onClick={onClose}>
-          <kbd>Esc</kbd>
-          <CloseIcon size={12} />
-        </button>
-      </header>
+      <PageHeader title="Settings" note="changes save automatically" closeLabel="Close settings" onClose={onClose} />
 
       <div className="set-body">
         <nav className="set-nav" aria-label="Settings sections">
