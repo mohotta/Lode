@@ -94,7 +94,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   await page.getByRole('menuitem', { name: 'Disable' }).click();
   await temp.getByRole('button', { name: 'Point actions' }).click();
   await page.getByRole('menuitem', { name: 'Delete permanently…' }).click();
-  await page.getByRole('dialog', { name: 'Delete this point permanently?' }).getByRole('button', { name: 'Delete permanently' }).click();
+  await page.getByRole('alertdialog', { name: 'Delete this point permanently?' }).getByRole('button', { name: 'Delete permanently' }).click();
   await expect(temp).toHaveCount(0);
   await expect(rows).toHaveCount(3);
   expect(await readFile(dayFile, 'utf8')).not.toContain('A throwaway note to delete');
@@ -102,7 +102,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   // --- Generate runs in the background; the composer stays usable meanwhile.
   const before = await hashBacklogs(vaultRoot);
   await page.getByRole('button', { name: 'Generate', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Send 3 point(s)' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Generate', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   await expect(input).toBeEnabled();
   const bar = page.getByRole('contentinfo', { name: 'Background jobs' });
@@ -129,7 +129,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   const original = await readFile(notePath, 'utf8');
   await page.getByRole('button', { name: 'Note actions' }).click();
   await page.getByRole('menuitem', { name: 'Rewrite from points…' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Regenerate from 3 point(s)' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Regenerate', exact: true }).click();
   await expect(bar.getByText('Rewritten')).toBeVisible();
   const note = page.getByRole('region', { name: 'Service networking & kube-proxy' });
   await expect(note.getByText('Rewritten: Services load-balance across ready pods.')).toBeVisible();
@@ -148,7 +148,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   // --- Move the note to trash: its points become unfiled; restore it from Trash.
   await page.getByRole('button', { name: 'Note actions' }).click();
   await page.getByRole('menuitem', { name: 'Move to trash' }).click();
-  await page.getByRole('dialog', { name: /to the trash\?$/ }).getByRole('button', { name: 'Move to trash' }).click();
+  await page.getByRole('alertdialog', { name: /to the trash\?$/ }).getByRole('button', { name: 'Move to trash' }).click();
   await expect(noteHeading).toHaveCount(0);
   await expect(backlog.getByText('unfiled')).toHaveCount(3);
   await page.getByRole('button', { name: /^Trash, 1 item/ }).click();
@@ -163,7 +163,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   // --- Delete the folder, then restore it.
   await page.getByRole('button', { name: 'Actions for Kubernetes' }).click();
   await page.getByRole('menuitem', { name: 'Move to trash' }).click();
-  await page.getByRole('dialog', { name: 'Move "Kubernetes" to the trash?' }).getByRole('button', { name: 'Move to trash' }).click();
+  await page.getByRole('alertdialog', { name: 'Move "Kubernetes" to the trash?' }).getByRole('button', { name: 'Move to trash' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Kubernetes' })).toHaveCount(0);
   await page.getByRole('button', { name: /^Trash, 1 item/ }).click();
   await trash.getByRole('button', { name: 'Restore Kubernetes' }).click();

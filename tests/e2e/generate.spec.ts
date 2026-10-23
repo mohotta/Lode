@@ -95,14 +95,15 @@ test('BYOK settings, generate with search, highlighted user points vs AI blocks'
   // --- Generate: preview first, then confirm.
   await page.getByRole('button', { name: 'Generate', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByText('3 unfiled')).toBeVisible();
+  await expect(dialog.getByText('unfiled points', { exact: true })).toBeVisible();
+  await expect(dialog.locator('.stat-num').first()).toHaveText('3');
   await expect(dialog.getByText('fake-model')).toBeVisible();
-  await expect(dialog.getByText('On (Tavily)')).toBeVisible();
-  await expect(dialog.getByText(/~[\d,]+ in/)).toBeVisible();
+  await expect(dialog.getByText('Web search on')).toBeVisible();
+  await expect(dialog.getByText('tokens in')).toBeVisible();
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.waitForTimeout(400); // let colour transitions settle before capturing
   await page.screenshot({ path: 'test-results/dialog-dark.png' });
-  await dialog.getByRole('button', { name: 'Send 3 point(s)' }).click();
+  await dialog.getByRole('button', { name: 'Generate', exact: true }).click();
   // Starting minimises the dialog into the status bar; the app stays usable meanwhile.
   await expect(dialog).toBeHidden();
   const bar = page.getByRole('contentinfo', { name: 'Background jobs' });

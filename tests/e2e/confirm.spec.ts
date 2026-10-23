@@ -18,7 +18,7 @@ test('confirmations use the in-app dialog: Esc and Cancel keep things, confirm a
   await page.getByRole('textbox', { name: 'New folder name' }).fill('Scratch');
   await page.keyboard.press('Enter');
   const folder = page.getByRole('button', { name: 'Scratch', exact: true });
-  const dialog = page.getByRole('dialog', { name: 'Move "Scratch" to the trash?' });
+  const dialog = page.getByRole('alertdialog', { name: 'Move "Scratch" to the trash?' });
   const askTrash = async (): Promise<void> => {
     await page.getByRole('button', { name: 'Actions for Scratch' }).click();
     await page.getByRole('menuitem', { name: 'Move to trash' }).click();

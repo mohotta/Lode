@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { setConfirmOpener, type AskOptions } from '../api';
-import { WarnIcon } from './Icons';
+import { InfoIcon, TrashIcon, WarnIcon } from './Icons';
 
 interface Pending extends AskOptions {
   resolve(ok: boolean): void;
@@ -39,10 +39,14 @@ export function ConfirmHost(): React.JSX.Element | null {
   };
 
   if (!pending) return null;
+  // Trash or delete actions get a trash icon. Only irreversible ones (`danger`) use the warning
+  // colour; everything else, like a restorable move to trash, uses the user's accent.
+  const trashy = /trash|delete|remove/i.test(pending.confirmLabel);
   return (
     <dialog
       ref={ref}
-      className="dialog confirm"
+      className="dialog v2 confirm"
+      role="alertdialog"
       aria-labelledby="confirm-title"
       aria-describedby={pending.detail ? 'confirm-detail' : undefined}
       // Esc answers no. Marked handled so pages that close on Esc (Review, Trash) stay open.
@@ -58,21 +62,19 @@ export function ConfirmHost(): React.JSX.Element | null {
       onMouseDown={(e) => e.target === e.currentTarget && answer(false)}
     >
       <div className="confirm-body">
-        {pending.danger && (
-          <span className="confirm-icon" aria-hidden="true">
-            <WarnIcon size={16} />
-          </span>
-        )}
+        <span className={`confirm-icon ${pending.danger ? 'danger' : ''}`} aria-hidden="true">
+          {trashy ? <TrashIcon size={16} /> : pending.danger ? <WarnIcon size={16} /> : <InfoIcon size={16} />}
+        </span>
         <div>
           <h2 id="confirm-title">{pending.message}</h2>
           {pending.detail && <p id="confirm-detail">{pending.detail}</p>}
         </div>
       </div>
-      <div className="dialog-actions">
+      <div className="dlg-foot">
         <button className="btn" onClick={() => answer(false)}>
           Cancel
         </button>
-        <button autoFocus className={`btn ${pending.danger ? 'danger-fill' : 'primary'}`} onClick={() => answer(true)}>
+        <button autoFocus className={`btn ${pending.danger ? 'danger-soft' : 'primary'}`} onClick={() => answer(true)}>
           {pending.confirmLabel}
         </button>
       </div>

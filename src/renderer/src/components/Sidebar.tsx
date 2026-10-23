@@ -116,7 +116,9 @@ export function Sidebar(p: Props): React.JSX.Element {
       </div>
 
       <div className="sidebar-scroll">
-        {vault ? (
+        {vault?.missing ? (
+          <p className="sidebar-empty">This vault's folder is missing. Choose what to do on the right.</p>
+        ) : vault ? (
           <>
             <div className="nav-items">
               <button className={`tree-item review-item ${p.reviewOpen ? 'selected' : ''} ${p.reviewCount > 0 ? 'has-due' : ''}`} onClick={p.onOpenReview}>

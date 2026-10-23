@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { rm } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import { removeDir } from '../helpers';
 import { launch, type Launched } from './launch';
@@ -46,8 +46,19 @@ test('remove a missing vault from the list without touching any files', async ()
   const panel = page.getByRole('alert').filter({ hasText: "Can't find" });
   await expect(panel).toBeVisible();
   await panel.getByRole('button', { name: 'Remove from list' }).click();
-  await page.getByRole('dialog', { name: /from the list\?$/ }).getByRole('button', { name: 'Remove from list' }).click();
+  await page.getByRole('alertdialog', { name: /from the list\?$/ }).getByRole('button', { name: 'Remove from list' }).click();
   await expect(panel).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Open or create a vault' }).first()).toBeVisible();
   expect(existsSync(vaultRoot)).toBe(false);
+});
+
+test('Try again picks the vault up when its folder is back (e.g. a reconnected drive)', async () => {
+  const { page, vaultRoot } = l;
+  await rm(vaultRoot, { recursive: true, force: true });
+  await page.evaluate(() => (globalThis as unknown as EventTarget).dispatchEvent(new Event('focus')));
+  const panel = page.getByRole('alert').filter({ hasText: "Can't find" });
+  await expect(panel).toBeVisible();
+  await mkdir(vaultRoot, { recursive: true });
+  await panel.getByRole('button', { name: /Try again/ }).click();
+  await expect(panel).toHaveCount(0);
 });

@@ -101,12 +101,13 @@ test('review, search, Only mine and a weekly digest', async () => {
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', { name: 'Kubernetes' }).click();
   await page.getByRole('button', { name: 'New digest' }).click();
   const picker = page.getByRole('dialog');
-  await picker.getByRole('tab', { name: 'Monthly' }).click();
-  await picker.getByRole('tab', { name: 'Weekly' }).click();
-  await picker.getByRole('list', { name: 'Periods' }).getByRole('button').first().click();
+  await picker.getByRole('button', { name: 'Monthly' }).click();
+  await picker.getByRole('button', { name: 'Weekly' }).click();
+  await expect(picker.getByRole('radiogroup', { name: 'Periods' }).getByRole('radio', { checked: true })).toHaveCount(1);
+  await picker.getByRole('button', { name: 'Create digest' }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: /^Digest · / })).toBeVisible();
-  await dialog.getByRole('button', { name: /^Write digest from \d+ point\(s\)$/ }).click();
+  await expect(dialog.getByRole('heading', { name: 'Write digest' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Write digest', exact: true }).click();
   await expect(page.getByRole('contentinfo', { name: 'Background jobs' }).getByText('Written')).toBeVisible();
   await page.getByRole('list', { name: 'Digests' }).getByRole('button').first().click();
   const digest = page.getByRole('region').filter({ hasText: 'Recap of Week' });

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { JobView, PreviewView } from '@shared/ipc';
 import { lode, unwrap } from '../api';
 import { progressText } from '../jobs';
-import { MinimizeIcon } from './Icons';
+import { ArrowUpRightIcon, DigestIcon, InfoIcon, MinimizeIcon, RefreshIcon, SparkIcon } from './Icons';
 
 /** What the dialog shows: a preview to confirm, or an existing background job. */
 export type DialogTarget =
@@ -33,6 +33,8 @@ type PreviewState =
   | { s: 'error'; message: string; preview?: PreviewView };
 
 const fmt = (n: number): string => n.toLocaleString();
+/** Compact token count for the stat tiles: 6200 → "6.2k". */
+const kfmt = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
 
 /**
  * Generate / Regenerate dialog. Confirming queues the job and minimises the dialog to the
@@ -48,20 +50,21 @@ export function GenerateDialog(p: Props): React.JSX.Element {
   const job = target.kind === 'job' ? p.jobs.find((j) => j.id === target.jobId) : undefined;
   const isRegen = target.kind === 'new' ? !!target.subtopic : job?.kind === 'regenerate';
   const isDigest = target.kind === 'new' ? !!target.digest : job?.kind === 'digest';
-  const heading =
+  const title = isDigest ? 'Write digest' : isRegen ? 'Regenerate notes' : 'Generate notes';
+  const subtitle =
     target.kind === 'new'
       ? target.digest
-        ? `Digest · ${target.digestTitle ?? target.digest}`
+        ? `${target.folderTitle} · ${target.digestTitle ?? target.digest}`
         : target.subtopic
-          ? `Regenerate · ${target.subtopicTitle ?? target.subtopic}`
-          : `Generate notes · ${target.folderTitle}`
+          ? (target.subtopicTitle ?? target.subtopic)
+          : `${target.folderTitle} · files your unfiled points into subtopics`
       : job
         ? job.kind === 'digest'
-          ? `Digest · ${job.digestTitle ?? job.digest}`
+          ? `${job.folderTitle} · ${job.digestTitle ?? job.digest}`
           : job.kind === 'regenerate'
-            ? `Regenerate · ${job.subtopicTitle ?? job.subtopic}`
-            : `Generate notes · ${job.folderTitle}`
-        : 'Generate';
+            ? (job.subtopicTitle ?? job.subtopic ?? '')
+            : job.folderTitle
+        : '';
   const jobTarget = newDigest ? { digest: newDigest } : newSubtopic ? { subtopic: newSubtopic } : {};
 
   useEffect(() => {
@@ -107,64 +110,106 @@ export function GenerateDialog(p: Props): React.JSX.Element {
   return (
     <dialog
       ref={ref}
-      className="dialog"
+      className="dialog v2"
       aria-labelledby="gen-title"
       onCancel={(e) => {
         e.preventDefault();
         close();
       }}
     >
-      <h2 id="gen-title">{heading}</h2>
+      <div className="dlg-head">
+        <span className="dlg-icon" aria-hidden="true">
+          {isDigest ? <DigestIcon size={15} /> : isRegen ? <RefreshIcon size={15} /> : <SparkIcon size={15} />}
+        </span>
+        <div>
+          <h2 id="gen-title">{title}</h2>
+          {subtitle && <p className="dlg-sub">{subtitle}</p>}
+        </div>
+      </div>
 
-      {target.kind === 'new' && state.s === 'loading' && <p>Preparing preview…</p>}
+      {target.kind === 'new' && state.s === 'loading' && (
+        <div className="dlg-body">
+          <p className="progress">
+            <span className="spinner" aria-hidden="true" /> Preparing preview…
+          </p>
+        </div>
+      )}
 
       {target.kind === 'new' && state.s === 'preview' && (
         <>
-          <dl className="preview-grid">
-            <dt>Points</dt>
-            <dd>
-              {fmt(state.preview.points)} {isDigest ? 'in this period' : isRegen ? 'in this note' : 'unfiled'}
-            </dd>
-            <dt>Provider</dt>
-            <dd>
-              {state.preview.provider} <span className="muted">({state.preview.baseUrl})</span>
-            </dd>
-            <dt>Model</dt>
-            <dd>{state.preview.model || <em>not set</em>}</dd>
-            <dt>Estimated tokens</dt>
-            <dd>
-              ~{fmt(state.preview.estimatedInputTokens)} in · ~{fmt(state.preview.estimatedOutputTokens)} out
-              {state.preview.chunks > 1 && ` · ${state.preview.chunks} batches`}
-            </dd>
-            <dt>Web search</dt>
-            <dd>
-              {isDigest ? 'Off (digests recap your own points)' : state.preview.useSearch ? 'On (Tavily)' : 'Off'}
-              {!isDigest && state.preview.searchUnavailable && (
-                <span className="muted"> — no Tavily key saved, so AI additions cannot be sourced</span>
-              )}
-            </dd>
-          </dl>
-          <p className="muted small">
-            {isDigest
-              ? 'Sends the points from this period (no web search) and writes a recap that shows your points highlighted. An earlier digest for the same period is replaced and kept in history.'
-              : isRegen
-              ? "Replaces this note's AI sections; the current version is kept so you can undo. Your points are sent again and never modified."
-              : 'Sends your unfiled points, short excerpts of earlier points (to spot repeats) and your subtopic names. Your backlog is never modified.'}{' '}
-            It runs in the background; you can keep working.
-          </p>
-          {state.preview.blocker && (
-            <div className="banner warn" role="status">
-              {state.preview.blocker}
+          <div className="dlg-body">
+            <div className="stat-tiles">
+              <div className="stat-tile">
+                <div className="stat-num">{fmt(state.preview.points)}</div>
+                <div className="stat-cap">{isDigest ? 'points in period' : isRegen ? 'points' : 'unfiled points'}</div>
+              </div>
+              <div className="stat-tile">
+                <div className="stat-num">~{kfmt(state.preview.estimatedInputTokens)}</div>
+                <div className="stat-cap">tokens in</div>
+              </div>
+              <div className="stat-tile">
+                <div className="stat-num">~{kfmt(state.preview.estimatedOutputTokens)}</div>
+                <div className="stat-cap">tokens out{state.preview.chunks > 1 ? ` · ${state.preview.chunks} batches` : ''}</div>
+              </div>
             </div>
-          )}
-          <div className="dialog-actions">
+            <div className="model-line" title={state.preview.baseUrl}>
+              <span className="mono strong">{state.preview.model || 'no model set'}</span>
+              <span className="dot-sep">·</span>
+              <span>{state.preview.provider}</span>
+              <span className="dot-sep">·</span>
+              <span>{isDigest ? 'No web search' : state.preview.useSearch ? 'Web search on' : 'Web search off'}</span>
+              <button className="link-btn push" onClick={p.onOpenSettings}>
+                Change
+              </button>
+            </div>
+            {!isDigest && state.preview.searchUnavailable && (
+              <p className="dlg-note">No Tavily key is saved, so AI additions can't cite sources this run.</p>
+            )}
+            {isRegen || isDigest ? (
+              <div className="dlg-callout">
+                <InfoIcon size={15} />
+                <span>
+                  {isDigest
+                    ? 'Sends the points from this period (no web search) and writes a recap with your points highlighted. An earlier digest for this period is replaced and kept in history.'
+                    : "Replaces this note's AI sections. The current version is kept, so you can undo. Your points are sent but never changed."}
+                </span>
+              </div>
+            ) : (
+              <>
+                <div className="dlg-cap">What gets sent</div>
+                <ul className="sent-list">
+                  <li>
+                    <ArrowUpRightIcon size={13} />
+                    Your {fmt(state.preview.points)} unfiled {state.preview.points === 1 ? 'point' : 'points'}
+                  </li>
+                  <li>
+                    <ArrowUpRightIcon size={13} />
+                    Short excerpts of earlier points, to spot repeats
+                  </li>
+                  <li>
+                    <ArrowUpRightIcon size={13} />
+                    Your subtopic names
+                  </li>
+                </ul>
+              </>
+            )}
+            {state.preview.blocker && (
+              <div className="banner warn" role="status">
+                {state.preview.blocker}
+              </div>
+            )}
+          </div>
+          <div className="dlg-foot">
+            <span className="dlg-foot-note">
+              Runs in the background{isRegen || isDigest ? '' : " · your backlog isn't changed"}
+            </span>
             {state.preview.blocker?.includes('Settings') && (
               <button className="btn" onClick={p.onOpenSettings}>
                 Open Settings
               </button>
             )}
             <button className="btn" onClick={close}>
-              Close
+              Cancel
             </button>
             <button
               className="btn primary"
@@ -172,11 +217,7 @@ export function GenerateDialog(p: Props): React.JSX.Element {
               onClick={() => void start(state.preview)}
               autoFocus
             >
-              {isDigest
-                ? `Write digest from ${fmt(state.preview.points)} point(s)`
-                : isRegen
-                  ? `Regenerate from ${fmt(state.preview.points)} point(s)`
-                  : `Send ${fmt(state.preview.points)} point(s)`}
+              {isDigest ? 'Write digest' : isRegen ? 'Regenerate' : 'Generate'}
             </button>
           </div>
         </>
@@ -184,10 +225,12 @@ export function GenerateDialog(p: Props): React.JSX.Element {
 
       {target.kind === 'new' && state.s === 'error' && (
         <>
-          <div className="banner error" role="alert">
-            {state.message}
+          <div className="dlg-body">
+            <div className="banner error" role="alert">
+              {state.message}
+            </div>
           </div>
-          <div className="dialog-actions">
+          <div className="dlg-foot">
             {state.preview && (
               <button className="btn" onClick={() => setState({ s: 'preview', preview: state.preview!, busy: false })}>
                 Back
@@ -202,8 +245,10 @@ export function GenerateDialog(p: Props): React.JSX.Element {
 
       {target.kind === 'job' && !job && (
         <>
-          <p>This job is no longer in the list.</p>
-          <div className="dialog-actions">
+          <div className="dlg-body">
+            <p>This job is no longer in the list.</p>
+          </div>
+          <div className="dlg-foot">
             <button className="btn primary" onClick={close} autoFocus>
               Close
             </button>
@@ -213,14 +258,16 @@ export function GenerateDialog(p: Props): React.JSX.Element {
 
       {job && (job.status === 'queued' || job.status === 'running') && (
         <>
-          <p className="progress" role="status" aria-live="polite">
-            <span className="spinner" aria-hidden="true" />{' '}
-            {job.status === 'queued'
-              ? `Waiting in the queue${queuedAhead ? ` (${queuedAhead} ahead)` : ''}…`
-              : progressText(job.progress)}
-          </p>
-          <p className="muted small">Runs in the background. Nothing is written until every call has finished.</p>
-          <div className="dialog-actions">
+          <div className="dlg-body">
+            <p className="progress" role="status" aria-live="polite">
+              <span className="spinner" aria-hidden="true" />{' '}
+              {job.status === 'queued'
+                ? `Waiting in the queue${queuedAhead ? ` (${queuedAhead} ahead)` : ''}…`
+                : progressText(job.progress)}
+            </p>
+          </div>
+          <div className="dlg-foot">
+            <span className="dlg-foot-note">Nothing is written until every call has finished</span>
             <button className="btn" onClick={() => void lode.generate.cancel(job.id)}>
               {job.status === 'queued' ? 'Remove from queue' : 'Cancel run'}
             </button>
@@ -233,45 +280,47 @@ export function GenerateDialog(p: Props): React.JSX.Element {
 
       {job?.status === 'done' && job.report && (
         <>
-          <p role="status">
-            {job.kind === 'digest'
-              ? `Wrote the digest from ${job.report.filed.length} point(s).`
-              : job.kind === 'regenerate'
-              ? `Rewrote the AI sections for ${job.report.filed.length} point(s). The previous version can be restored with Undo regenerate.`
-              : `Filed ${job.report.filed.length} point(s)${job.report.unfiled.length > 0 ? `, ${job.report.unfiled.length} left unfiled` : ''}.`}{' '}
-            Used {fmt(job.report.usage.inputTokens)} in / {fmt(job.report.usage.outputTokens)} out tokens,{' '}
-            {job.report.usage.searches} search(es), {job.report.sources} source(s) cited.
-            {job.report.corrected.length > 0 &&
-              ` ${job.report.corrected.length} point(s) got a correction note; your text is unchanged.`}
-            {job.report.duplicates.length > 0 &&
-              ` ${job.report.duplicates.length} point(s) repeat an earlier point and were filed next to it.`}
-          </p>
-          {job.report.changed.length > 0 && (
-            <ul className="changed" role="list">
-              {job.report.changed.map((c) => (
-                <li key={c.slug}>
-                  <button
-                    className="chip filed"
-                    onClick={() => {
-                      p.onOpenSubtopic(job.folder, job.kind === 'digest' ? `digest:${c.slug}` : c.slug);
-                      closeFinished();
-                    }}
-                  >
-                    {c.title}
-                    {c.isNew && ' (new)'}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {job.report.warnings.length > 0 && (
-            <ul className="warnings">
-              {job.report.warnings.map((w, i) => (
-                <li key={i}>{w}</li>
-              ))}
-            </ul>
-          )}
-          <div className="dialog-actions">
+          <div className="dlg-body">
+            <p role="status">
+              {job.kind === 'digest'
+                ? `Wrote the digest from ${job.report.filed.length} point(s).`
+                : job.kind === 'regenerate'
+                ? `Rewrote the AI sections for ${job.report.filed.length} point(s). The previous version can be restored with Undo regenerate.`
+                : `Filed ${job.report.filed.length} point(s)${job.report.unfiled.length > 0 ? `, ${job.report.unfiled.length} left unfiled` : ''}.`}{' '}
+              Used {fmt(job.report.usage.inputTokens)} in / {fmt(job.report.usage.outputTokens)} out tokens,{' '}
+              {job.report.usage.searches} search(es), {job.report.sources} source(s) cited.
+              {job.report.corrected.length > 0 &&
+                ` ${job.report.corrected.length} point(s) got a correction note; your text is unchanged.`}
+              {job.report.duplicates.length > 0 &&
+                ` ${job.report.duplicates.length} point(s) repeat an earlier point and were filed next to it.`}
+            </p>
+            {job.report.changed.length > 0 && (
+              <ul className="changed" role="list">
+                {job.report.changed.map((c) => (
+                  <li key={c.slug}>
+                    <button
+                      className="chip filed"
+                      onClick={() => {
+                        p.onOpenSubtopic(job.folder, job.kind === 'digest' ? `digest:${c.slug}` : c.slug);
+                        closeFinished();
+                      }}
+                    >
+                      {c.title}
+                      {c.isNew && ' (new)'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {job.report.warnings.length > 0 && (
+              <ul className="warnings">
+                {job.report.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="dlg-foot">
             <button className="btn primary" onClick={closeFinished} autoFocus>
               Done
             </button>
@@ -281,10 +330,12 @@ export function GenerateDialog(p: Props): React.JSX.Element {
 
       {job && (job.status === 'failed' || job.status === 'cancelled') && (
         <>
-          <div className={`banner ${job.status === 'failed' ? 'error' : 'warn'}`} role="alert">
-            {job.status === 'failed' ? job.error : 'Cancelled. Nothing was written.'}
+          <div className="dlg-body">
+            <div className={`banner ${job.status === 'failed' ? 'error' : 'warn'}`} role="alert">
+              {job.status === 'failed' ? job.error : 'Cancelled. Nothing was written.'}
+            </div>
           </div>
-          <div className="dialog-actions">
+          <div className="dlg-foot">
             <button className="btn primary" onClick={closeFinished} autoFocus>
               Close
             </button>

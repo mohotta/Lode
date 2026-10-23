@@ -194,6 +194,19 @@ export const UndoIcon = (p: P): React.JSX.Element => (
   </Svg>
 );
 
+export const FolderPlusIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M2.5 4.5a1 1 0 011-1h3l1.5 1.5h4.5a1 1 0 011 1v6a1 1 0 01-1 1h-9a1 1 0 01-1-1z" />
+    <path d="M8 7v3.5M6.25 8.75h3.5" />
+  </Svg>
+);
+
+export const ArrowUpRightIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M5 11l6-6M6.5 5H11v4.5" />
+  </Svg>
+);
+
 export const UpDownIcon = (p: P): React.JSX.Element => (
   <Svg {...p}>
     <path d="M5.5 6L8 3.5 10.5 6M5.5 10L8 12.5 10.5 10" />

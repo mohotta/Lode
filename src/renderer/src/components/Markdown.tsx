@@ -28,7 +28,7 @@ const textOf = (n: HastNode | undefined): string =>
   !n ? '' : n.type === 'text' ? (n.value ?? '') : (n.children ?? []).map(textOf).join('');
 
 /** Copies via the async API, falling back to execCommand (the renderer is denied all permissions). */
-async function copyText(text: string): Promise<void> {
+export async function copyText(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
   } catch {

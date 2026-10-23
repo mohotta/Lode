@@ -599,6 +599,22 @@ export function App(): React.JSX.Element {
           <MissingVault
             vault={activeVault}
             onOpenOther={() => void openVault()}
+            onRetry={() =>
+              void guard(async () => {
+                const vs = await refreshVaults();
+                if (vs && !vs.find((v) => v.id === activeVault.id)?.missing) await selectVault(activeVault.id, vs);
+              })
+            }
+            onLocate={() =>
+              void guard(async () => {
+                // The picked folder becomes the vault; the stale entry is dropped (no files touched).
+                const v = await unwrap(lode.vault.open());
+                if (!v) return;
+                if (v.id !== activeVault.id) await unwrap(lode.vault.forget(activeVault.id));
+                const vs = await refreshVaults();
+                await selectVault(v.id, vs ?? undefined);
+              })
+            }
             onRecreate={() =>
               void guard(async () => {
                 await unwrap(lode.vault.recreate(activeVault.id));
@@ -807,6 +823,10 @@ export function App(): React.JSX.Element {
           onPick={(period: DigestPeriod) => {
             setPickingDigest(false);
             openDigestDialog(period.id, period.title);
+          }}
+          onOpen={(period: DigestPeriod) => {
+            setPickingDigest(false);
+            if (folder) navigate({ folder, subtopic: `${DIGEST_PREFIX}${period.id}` });
           }}
         />
       )}
