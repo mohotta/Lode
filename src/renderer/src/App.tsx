@@ -24,7 +24,9 @@ import { ReviewView } from './components/ReviewView';
 import { SearchView } from './components/SearchView';
 import { StatusBar } from './components/StatusBar';
 import { TrashView } from './components/TrashView';
-import { CloseIcon } from './components/Icons';
+import { CloseIcon, FolderIcon, WarnIcon } from './components/Icons';
+import { EmptyState } from './components/EmptyState';
+import appIcon from '../../../build/icon.svg';
 import { DIGEST_PREFIX, NotePane } from './components/NotePane';
 import { isActive } from './jobs';
 import { Resizer } from './components/Resizer';
@@ -521,6 +523,14 @@ export function App(): React.JSX.Element {
         reviewOpen={page === 'review'}
         reviewCount={activeMissing ? 0 : review.length}
         searchOpen={searchOpen}
+        activity={
+          <StatusBar
+            jobs={jobs}
+            onOpen={(id) => setDialog({ kind: 'job', jobId: id })}
+            onCancel={(id) => void lode.generate.cancel(id)}
+            onDismiss={(id) => void lode.generate.dismiss(id)}
+          />
+        }
         resizer={
           <Resizer
             label="Resize sidebar"
@@ -587,7 +597,10 @@ export function App(): React.JSX.Element {
 
       {error && (
         <div className="toast error" role="alert">
-          <span>{error}</span>
+          <span className="toast-icon" aria-hidden="true">
+            <WarnIcon size={14} />
+          </span>
+          <span className="toast-text">{error}</span>
           <button className="icon-btn" aria-label="Dismiss error" onClick={() => setError(null)}>
             <CloseIcon size={14} />
           </button>
@@ -740,19 +753,23 @@ export function App(): React.JSX.Element {
                 </div>
               </>
             ) : (
-              <div className="welcome">
-                <h1>Lode</h1>
-                <p>
-                  {vaults.length === 0
-                    ? 'Capture what you learn, one line at a time. Open or create a vault to begin.'
-                    : 'Pick a folder, or create one, and add what you learned today.'}
-                </p>
-                {vaults.length === 0 && (
-                  <button className="btn primary" onClick={() => void openVault()}>
-                    Open or create a vault
-                  </button>
-                )}
-              </div>
+              vaults.length === 0 ? (
+                <EmptyState
+                  icon={<img src={appIcon} alt="" width={30} height={30} />}
+                  title="Welcome to Lode"
+                  actions={
+                    <button className="btn primary tall" onClick={() => void openVault()}>
+                      Open or create a vault
+                    </button>
+                  }
+                >
+                  Capture what you learn, one line at a time. A vault is a folder of plain markdown files on your disk.
+                </EmptyState>
+              ) : (
+                <EmptyState icon={<FolderIcon size={18} />} title="Pick a folder">
+                  Choose a folder in the sidebar, or create one with +, then add what you learned today.
+                </EmptyState>
+              )
             )}
           </main>
 
@@ -788,12 +805,6 @@ export function App(): React.JSX.Element {
         </>
       )}
 
-      <StatusBar
-        jobs={jobs}
-        onOpen={(id) => setDialog({ kind: 'job', jobId: id })}
-        onCancel={(id) => void lode.generate.cancel(id)}
-        onDismiss={(id) => void lode.generate.dismiss(id)}
-      />
 
       <ConfirmHost />
 

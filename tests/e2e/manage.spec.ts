@@ -105,7 +105,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   await page.getByRole('dialog').getByRole('button', { name: 'Generate', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   await expect(input).toBeEnabled();
-  const bar = page.getByRole('contentinfo', { name: 'Background jobs' });
+  const bar = page.getByRole('region', { name: 'Background jobs' });
   await expect(bar.getByText(/Filed 3/)).toBeVisible();
   await bar.getByRole('button', { name: 'Dismiss Generate · Kubernetes' }).click();
   await expect(bar).toHaveCount(0);

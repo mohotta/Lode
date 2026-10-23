@@ -138,7 +138,7 @@ function Correction({ block }: { block: LlmB }): React.JSX.Element {
 }
 
 /** Generated content: muted prose beside a "Context" pill, with numbered citations. */
-export function LlmBlock({ block }: { block: LlmB }): React.JSX.Element | null {
+export function LlmBlock({ block, label = 'Context' }: { block: LlmB; label?: string }): React.JSX.Element | null {
   // A correction whose point is not on the page (removed or missing) gets a card of its own.
   if (block.correctionFor) {
     return (
@@ -157,7 +157,7 @@ export function LlmBlock({ block }: { block: LlmB }): React.JSX.Element | null {
   return (
     <article className="llm-block" aria-label="AI-generated explanation">
       <div className="margin-mark" title={aiTitle(block)}>
-        <span className="mark-ai">Context</span>
+        <span className="mark-ai">{label}</span>
       </div>
       <div className="llm-body prose">
         <Markdown text={body} cite />

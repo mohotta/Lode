@@ -108,10 +108,10 @@ test('review, search, Only mine and a weekly digest', async () => {
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('heading', { name: 'Write digest' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Write digest', exact: true }).click();
-  await expect(page.getByRole('contentinfo', { name: 'Background jobs' }).getByText('Written')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Background jobs' }).getByText('Written')).toBeVisible();
   await page.getByRole('list', { name: 'Digests' }).getByRole('button').first().click();
   const digest = page.getByRole('region').filter({ hasText: 'Recap of Week' });
-  await expect(digest.getByText(/Digest ·/)).toBeVisible();
+  await expect(digest.getByText(/Weekly digest/)).toBeVisible();
   await expect(digest.getByRole('article', { name: /Your point from/ }).first()).toBeVisible();
   await expect(digest.getByRole('heading', { name: 'Service networking' })).toBeVisible();
   await page.screenshot({ path: 'test-results/digest.png' });

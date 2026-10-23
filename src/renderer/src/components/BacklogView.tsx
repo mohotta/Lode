@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { BacklogDay, SubtopicInfo } from '@shared/types';
 import { dayLabel, shortDate } from '../dates';
 import { BanIcon, CopyIcon, DotsIcon, PencilIcon, TrashIcon, UndoIcon, WarnIcon } from './Icons';
+import { EmptyState } from './EmptyState';
 import { Markdown } from './Markdown';
 import { Menu } from './Menu';
 import { PointEditor } from './PointEditor';
@@ -25,10 +26,9 @@ export function BacklogView(p: Props): React.JSX.Element {
   const dateOf = (id: string): string => days.flatMap((d) => d.points).find((pt) => pt.id === id)?.date ?? '';
   if (days.length === 0) {
     return (
-      <div className="empty-state small-pad">
-        <p className="empty-title">Nothing captured yet</p>
-        <p>Write one thing you learned today and press Enter.</p>
-      </div>
+      <EmptyState compact icon={<PencilIcon size={18} />} title="Nothing captured yet">
+        Write one thing you learned today in the box above and press Enter.
+      </EmptyState>
     );
   }
   return (

@@ -52,6 +52,8 @@ interface Props {
   onOpenSearch(): void;
   /** Drag handle on the right edge (see Resizer). */
   resizer?: React.ReactNode;
+  /** Background job cards, shown above the footer buttons. */
+  activity?: React.ReactNode;
 }
 
 const NEXT_THEME: Record<ThemePref, ThemePref> = { system: 'dark', dark: 'light', light: 'system' };
@@ -305,15 +307,11 @@ export function Sidebar(p: Props): React.JSX.Element {
             </ul>
           </>
         ) : (
-          <div className="sidebar-empty">
-            <p>A vault is a folder of plain markdown files on your disk.</p>
-            <button className="btn primary block" onClick={p.onOpenVault}>
-              Open or create a vault
-            </button>
-          </div>
+          <p className="sidebar-empty">No vault open. Your folders will show here.</p>
         )}
       </div>
 
+      {p.activity}
       <div className="sidebar-footer">
         <button className={`tree-item ${p.settingsOpen ? 'selected' : ''}`} onClick={p.onOpenSettings}>
           <GearIcon size={15} className="tree-icon" />

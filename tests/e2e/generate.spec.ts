@@ -106,7 +106,7 @@ test('BYOK settings, generate with search, highlighted user points vs AI blocks'
   await dialog.getByRole('button', { name: 'Generate', exact: true }).click();
   // Starting minimises the dialog into the status bar; the app stays usable meanwhile.
   await expect(dialog).toBeHidden();
-  const bar = page.getByRole('contentinfo', { name: 'Background jobs' });
+  const bar = page.getByRole('region', { name: 'Background jobs' });
   await expect(bar.getByText('Generate · Kubernetes')).toBeVisible();
   await expect(bar.getByText(/Filed 3/)).toBeVisible();
   await bar.getByRole('button', { name: /^Generate · Kubernetes/ }).click();

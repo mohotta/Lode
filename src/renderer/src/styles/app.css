@@ -230,7 +230,7 @@ button {
     var(--side-w)
     max(240px, min(var(--list-w), calc(100vw - var(--side-w) - var(--note-min))))
     minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
 }
 .app.with-settings {
@@ -2000,96 +2000,9 @@ kbd {
   font-size: 13px;
 }
 
-/* ---------- Status bar (background jobs) ---------- */
-.status-bar {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 34px;
-  padding: 0 10px 0 14px;
-  border-top: 1px solid var(--line);
-  background: var(--bg-side);
-  font-size: 13px;
-  min-width: 0;
-}
-.status-summary {
-  flex: none;
-  color: var(--text-3);
-}
-.jobs {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.job {
-  display: flex;
-  align-items: center;
-  flex: none;
-  max-width: 420px;
-  height: 24px;
-  border-radius: 6px;
-  background: var(--hover);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-.job.running {
-  box-shadow: inset 0 0 0 1px var(--line-strong);
-}
-.job.failed {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent);
-}
-.job-main {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  height: 100%;
-  padding: 0 4px 0 9px;
-  border: 0;
-  background: none;
-  color: var(--text-2);
-  font-size: 13px;
-}
-.job-main:hover .job-title {
-  color: var(--text);
-}
-.job-icon {
-  flex: none;
-}
-.job-dot {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1.5px var(--text-3);
-}
-.job-title {
-  font-weight: 550;
-  color: var(--text-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 200px;
-}
-.job-status {
-  color: var(--text-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.job-x {
-  width: 20px;
-  height: 20px;
-  margin-right: 2px;
-}
+/* ---------- Toast position ---------- */
 .toast {
-  bottom: 48px;
+  bottom: 20px;
 }
 
 /* ---------- Trash ---------- */
@@ -3446,6 +3359,12 @@ select.set-input {
   flex-direction: column;
   gap: 0;
 }
+/* Too narrow for the rail: hide it (repeated here so it wins over the rule above). */
+@container (max-width: 760px) {
+  .outline {
+    display: none;
+  }
+}
 .rail-sec + .rail-sec {
   margin-top: 20px;
   padding-top: 20px;
@@ -4211,4 +4130,253 @@ select.set-input {
 }
 .period-note.open {
   color: var(--accent);
+}
+
+/* ---------- Empty states ---------- */
+.empty-v2 {
+  max-width: 380px;
+  margin: 16vh auto 0;
+  padding: 0 24px;
+  text-align: center;
+}
+.empty-v2.compact {
+  margin-top: 32px;
+}
+.empty-tile {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  border: 1px solid var(--card-line);
+  border-radius: 13px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  color: var(--text-2);
+}
+.empty-v2 .empty-title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+.empty-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-3);
+}
+.empty-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+/* ---------- Background jobs (cards in the sidebar footer) ---------- */
+.job-cards {
+  flex: none;
+  max-height: 40vh;
+  overflow: auto;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+}
+.job-cards .jobs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.job-cards .job {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--card-line);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.job-cards .job.failed {
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+.job-cards .job-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 4px 8px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+.job-cards .job-main:hover {
+  background: var(--hover);
+}
+.job-badge {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--selected);
+  color: var(--text-3);
+}
+.job-badge.done {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+.job-badge.failed {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+.job-badge.running {
+  background: none;
+}
+.job-badge .job-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.job-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.job-cards .job-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+}
+.job-cards .job-status {
+  font-size: 12.5px;
+  color: var(--accent);
+}
+.job-cards .job.failed .job-status {
+  color: var(--danger);
+}
+.job-cards .job-x {
+  flex: none;
+  margin: 6px 4px 0 0;
+  width: 24px;
+  height: 24px;
+}
+
+/* ---------- Error toast ---------- */
+.toast {
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 10px 12px 12px;
+  border: 1px solid var(--card-line);
+  border-radius: 12px;
+  background: var(--card);
+}
+.toast.error {
+  border-left: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.toast-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  color: var(--danger);
+}
+.toast-text {
+  flex: 1;
+  padding-top: 3px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Duplicate notice under the composer ---------- */
+.dup-notice {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--card-line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.dup-notice.exact {
+  border-color: color-mix(in srgb, var(--fix) 40%, transparent);
+}
+.dup-icon {
+  box-sizing: content-box;
+  padding: 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fix) 14%, transparent);
+  color: var(--fix);
+}
+.dup-text {
+  flex: 1 1 160px;
+  gap: 2px;
+}
+.dup-text span {
+  white-space: normal;
+  font-size: 13px;
+}
+.dup-actions {
+  flex: 1 1 100%;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.dup-actions .btn {
+  height: 28px;
+}
+
+/* ---------- Inline point editor ---------- */
+.point-editor {
+  gap: 10px;
+}
+.point-editor .composer.editing {
+  border-color: color-mix(in srgb, var(--accent-fill) 55%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-fill) 12%, transparent);
+}
+.point-editor .composer.editing .rich-input {
+  min-height: 72px;
+}
+.point-editor-actions .btn {
+  height: 30px;
+}
+
+/* ---------- Menus and calendar, in the card language ---------- */
+.menu {
+  padding: 6px;
+  border-color: var(--card-line);
+  border-radius: 12px;
+  background: var(--bg-raised);
+}
+.menu-item {
+  height: 32px;
+  border-radius: 8px;
+}
+.calendar {
+  padding: 12px;
+  border-color: var(--card-line);
+  border-radius: 14px;
+}
+
+/* ---------- Notes and digests ---------- */
+/* A run of AI blocks shares one label: the pill shows on the first only. */
+.llm-block + .llm-block > .margin-mark {
+  visibility: hidden;
+}
+.meta-strong {
+  color: var(--text-2);
+  font-weight: 500;
 }

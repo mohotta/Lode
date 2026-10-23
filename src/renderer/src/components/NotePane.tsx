@@ -9,7 +9,6 @@ import {
   ArrowRightIcon,
   ChevronRightIcon,
   DotsIcon,
-  DigestIcon,
   GridIcon,
   ListIcon,
   NoteIcon,
@@ -19,6 +18,7 @@ import {
   UndoIcon,
 } from './Icons';
 import { CiteContext } from './Markdown';
+import { EmptyState } from './EmptyState';
 import { Menu } from './Menu';
 
 interface Props {
@@ -143,6 +143,7 @@ export function NotePane(p: Props): React.JSX.Element {
   const livePoints = p.days.flatMap((d) => d.points).filter((pt) => !pt.deleted);
   const isDigest = !!active?.startsWith(DIGEST_PREFIX);
   const activeSlug = isDigest && active ? active.slice(DIGEST_PREFIX.length) : active;
+  const digestInfo = isDigest ? p.digests.find((d) => d.id === activeSlug) : undefined;
   const shown = note && activeSlug && note.slug === activeSlug && note.folder === folder ? note : null;
   const ai = shown?.blocks.filter((b) => b.kind === 'llm' && !b.duplicate).length ?? 0;
   const outlinePoints = (shown?.blocks ?? []).flatMap((b) =>
@@ -328,7 +329,14 @@ export function NotePane(p: Props): React.JSX.Element {
               </h2>
               {(isDigest || (mineOnly && ai > 0)) && (
                 <p className="note-meta">
-                  {isDigest && `Digest · written ${dayMonth(shown.updated)}`}
+                  {isDigest && digestInfo && (
+                    <>
+                      <span className="meta-strong">{digestInfo.kind === 'week' ? 'Weekly digest' : 'Monthly digest'}</span>
+                      {` · ${digestInfo.pointCount} ${digestInfo.pointCount === 1 ? 'point' : 'points'}`}
+                    </>
+                  )}
+                  {isDigest && !digestInfo && <span className="meta-strong">Digest</span>}
+                  {isDigest && ` · written ${dayMonth(shown.updated)}`}
                   {isDigest && mineOnly && ai > 0 && ' · '}
                   {mineOnly && ai > 0 && 'Generated sections hidden'}
                 </p>
@@ -348,7 +356,7 @@ export function NotePane(p: Props): React.JSX.Element {
                           onSetDeleted={p.onSetPointDeleted}
                         />
                       ) : b.kind === 'llm' ? (
-                        <LlmBlock key={`${b.id}-${i}`} block={b} />
+                        <LlmBlock key={`${b.id}-${i}`} block={b} label={isDigest ? 'Recap' : 'Context'} />
                       ) : (
                         <RawBlock key={`raw-${i}`} text={b.text} />
                       ),
@@ -428,25 +436,14 @@ export function NotePane(p: Props): React.JSX.Element {
             </nav>
           </div>
         ) : !folder ? (
-          <div className="empty-state">
-            <NoteIcon size={28} className="empty-icon" />
-            <p className="empty-title">No folder selected</p>
-            <p>Notes for a folder appear here.</p>
-          </div>
-        ) : p.subtopics.length === 0 && p.digests.length === 0 ? (
-          <div className="empty-state">
-            <NoteIcon size={28} className="empty-icon" />
-            <p className="empty-title">No notes yet</p>
-            <p>Capture a few points, then press Generate to organise them into subtopics.</p>
-            <button className="btn" onClick={p.onNewDigest}>
-              <DigestIcon size={14} /> New digest
-            </button>
-          </div>
+          <EmptyState icon={<NoteIcon size={20} />} title="No folder open">
+            Choose a folder in the sidebar. Its subtopics, digests and latest points show here.
+          </EmptyState>
         ) : (
           <div className="overview">
             <div className="folder-head">
               <div>
-                <h1 className="folder-title">{p.folderTitle}</h1>
+                <h2 className="folder-title">{p.folderTitle}</h2>
                 <div className="folder-stats">
                   <span>
                     <b>{p.subtopics.length}</b> {p.subtopics.length === 1 ? 'subtopic' : 'subtopics'}
