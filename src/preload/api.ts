@@ -41,6 +41,8 @@ export interface LodeApi {
     edit(vaultId: string, folder: string, id: string, text: string): R<Point>;
     /** Soft delete (tombstone) or restore. The text is kept either way. */
     softDelete(vaultId: string, folder: string, id: string, deleted: boolean): R<void>;
+    /** Permanently removes a disabled point from its day file. Refused for a live point. */
+    purge(vaultId: string, folder: string, id: string): R<void>;
     listDays(vaultId: string, folder: string): R<BacklogDay[]>;
   };
   notes: {

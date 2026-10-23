@@ -172,3 +172,17 @@ export function setTombstone(content: string, date: string, id: PointId, deleted
   const data = split.hasFrontmatter ? { ...split.data, deleted: next } : { date, deleted: next };
   return renderFrontmatter(data) + split.body;
 }
+
+/**
+ * User-initiated permanent delete (`backlog:purge`): removes one entry's lines and its
+ * tombstone. Every other entry keeps its bytes. The ID is not reused (new IDs avoid all live ones,
+ * and notes that cite it show it as missing).
+ */
+export function removeEntry(content: string, date: string, id: PointId): string {
+  const { head, body } = splitHead(setTombstone(content, date, id, false));
+  const lines = body.split('\n');
+  const span = entrySpans(lines).find((s) => s.id === id);
+  if (!span) throw new Error('Point not found in this day file');
+  lines.splice(span.start, span.end - span.start);
+  return head + lines.join('\n');
+}

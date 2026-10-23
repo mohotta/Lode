@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { BacklogDay, SubtopicInfo } from '@shared/types';
 import { dayLabel, shortDate } from '../dates';
-import { CopyIcon, DotsIcon, PencilIcon, TrashIcon, UndoIcon, WarnIcon } from './Icons';
+import { BanIcon, CopyIcon, DotsIcon, PencilIcon, TrashIcon, UndoIcon, WarnIcon } from './Icons';
 import { Markdown } from './Markdown';
 import { Menu } from './Menu';
 import { PointEditor } from './PointEditor';
@@ -14,6 +14,8 @@ interface Props {
   onJumpToPoint(id: string): void;
   onEdit(id: string, text: string): Promise<boolean>;
   onSetDeleted(id: string, deleted: boolean): Promise<void>;
+  /** Permanently removes a disabled point (asks first). */
+  onPurge(id: string): Promise<void>;
 }
 
 export function BacklogView(p: Props): React.JSX.Element {
@@ -61,7 +63,7 @@ export function BacklogView(p: Props): React.JSX.Element {
                         </div>
                         <div className="point-meta">
                           {pt.deleted ? (
-                            <span className="meta-note">deleted</span>
+                            <span className="meta-note">disabled</span>
                           ) : filed ? (
                             pt.filedUnder.map((s) => (
                               <button key={s} className="topic-link" onClick={() => onOpenSubtopic(s)} title={`Open ${titleOf(s)}`}>
@@ -97,14 +99,22 @@ export function BacklogView(p: Props): React.JSX.Element {
                         align="end"
                         items={
                           pt.deleted
-                            ? [{ label: 'Restore', icon: <UndoIcon size={14} />, onSelect: () => void p.onSetDeleted(pt.id, false) }]
+                            ? [
+                                { label: 'Restore', icon: <UndoIcon size={14} />, onSelect: () => void p.onSetDeleted(pt.id, false) },
+                                'separator',
+                                {
+                                  label: 'Delete permanently…',
+                                  icon: <TrashIcon size={14} />,
+                                  danger: true,
+                                  onSelect: () => void p.onPurge(pt.id),
+                                },
+                              ]
                             : [
                                 { label: 'Edit', icon: <PencilIcon size={14} />, onSelect: () => setEditing(pt.id) },
                                 'separator',
                                 {
-                                  label: 'Delete',
-                                  icon: <TrashIcon size={14} />,
-                                  danger: true,
+                                  label: 'Disable',
+                                  icon: <BanIcon size={14} />,
                                   onSelect: () => void p.onSetDeleted(pt.id, true),
                                 },
                               ]

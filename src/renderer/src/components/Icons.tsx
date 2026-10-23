@@ -194,6 +194,13 @@ export const UndoIcon = (p: P): React.JSX.Element => (
   </Svg>
 );
 
+export const BanIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <circle cx="8" cy="8" r="5.5" />
+    <path d="M4.1 11.9l7.8-7.8" />
+  </Svg>
+);
+
 export const CopyIcon = (p: P): React.JSX.Element => (
   <Svg {...p}>
     <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />

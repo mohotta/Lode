@@ -332,6 +332,19 @@ export function App(): React.JSX.Element {
     await refreshFolder();
   };
 
+  const purgePoint = async (id: string): Promise<void> => {
+    if (!vaultId || !folder) return;
+    const ok = await ask({
+      message: 'Delete this point permanently?',
+      detail: 'It is removed from your backlog file and cannot be restored. Notes that cite it will show it as missing.',
+      confirmLabel: 'Delete permanently',
+      danger: true,
+    });
+    if (!ok) return;
+    await guard(() => unwrap(lode.backlog.purge(vaultId, folder, id)));
+    await refreshFolder();
+  };
+
   const deleteNote = async (slug: string, title: string): Promise<void> => {
     if (!vaultId || !folder) return;
     const ok = await ask({
@@ -626,6 +639,7 @@ export function App(): React.JSX.Element {
                     onJumpToPoint={jumpToPoint}
                     onEdit={editPoint}
                     onSetDeleted={setPointDeleted}
+                    onPurge={purgePoint}
                   />
                 </div>
               </>

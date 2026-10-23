@@ -42,6 +42,8 @@ export const Schemas = {
   }),
   'backlog:edit': z.object({ vaultId, folder: slug, id: pointId, text: z.string().min(1).max(4000) }),
   'backlog:softDelete': z.object({ vaultId, folder: slug, id: pointId, deleted: z.boolean() }),
+  /** Permanently removes a point the user has already disabled. */
+  'backlog:purge': z.object({ vaultId, folder: slug, id: pointId }),
   'backlog:listDays': z.object({ vaultId, folder: slug }),
   'notes:list': z.object({ vaultId, folder: slug }),
   'notes:read': z.object({ vaultId, folder: slug, subtopic: slug }),

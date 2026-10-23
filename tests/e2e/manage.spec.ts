@@ -76,15 +76,27 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   await expect(backlog.getByText('kube-proxy in IPVS mode scales better with many Services')).toBeVisible();
   expect(await readFile(dayFile, 'utf8')).toContain(`kube-proxy in IPVS mode scales better with many Services ^${idBefore}`);
 
-  // --- Soft delete and restore.
+  // --- Disable (soft delete) and restore; a disabled point can also be deleted permanently.
   const near = rows.filter({ hasText: 'cluster network' });
   await near.getByRole('button', { name: 'Point actions' }).click();
-  await page.getByRole('menuitem', { name: 'Delete' }).click();
-  await expect(near.getByText('deleted')).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /Delete permanently/ })).toHaveCount(0);
+  await page.getByRole('menuitem', { name: 'Disable' }).click();
+  await expect(near.getByText('disabled')).toBeVisible();
   expect(await readFile(dayFile, 'utf8')).toMatch(/deleted:\s*\n?\s*-?\s*\[?p-/);
   await near.getByRole('button', { name: 'Point actions' }).click();
   await page.getByRole('menuitem', { name: 'Restore' }).click();
-  await expect(near.getByText('deleted')).toHaveCount(0);
+  await expect(near.getByText('disabled')).toHaveCount(0);
+
+  await input.fill('A throwaway note to delete');
+  await page.keyboard.press('Enter');
+  const temp = rows.filter({ hasText: 'A throwaway note to delete' });
+  await temp.getByRole('button', { name: 'Point actions' }).click();
+  await page.getByRole('menuitem', { name: 'Disable' }).click();
+  await temp.getByRole('button', { name: 'Point actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete permanently…' }).click(); // native confirm auto-accepts in e2e
+  await expect(temp).toHaveCount(0);
+  await expect(rows).toHaveCount(3);
+  expect(await readFile(dayFile, 'utf8')).not.toContain('A throwaway note to delete');
 
   // --- Generate runs in the background; the composer stays usable meanwhile.
   const before = await hashBacklogs(vaultRoot);

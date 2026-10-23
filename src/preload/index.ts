@@ -30,6 +30,7 @@ const api: LodeApi = {
       }),
     edit: (vaultId, folder, id, text) => call('backlog:edit')({ vaultId, folder, id, text }),
     softDelete: (vaultId, folder, id, deleted) => call('backlog:softDelete')({ vaultId, folder, id, deleted }),
+    purge: (vaultId, folder, id) => call('backlog:purge')({ vaultId, folder, id }),
     listDays: (vaultId, folder) => call('backlog:listDays')({ vaultId, folder }),
   },
   notes: {

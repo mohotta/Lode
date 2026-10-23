@@ -58,6 +58,19 @@ describe('point edit and soft delete (user-initiated backlog writes)', () => {
     expect((await backlog.findPoint('k8s', a.id))?.deleted).toBe(false);
   });
 
+  it('purges only a disabled point, leaving the rest of the day file intact', async () => {
+    const a = await backlog.add('k8s', 'Pods are mortal');
+    const b = await backlog.add('k8s', 'Services are stable');
+    await expect(backlog.purge('k8s', a.id)).rejects.toThrow(/Disable the point/);
+    await backlog.setDeleted('k8s', a.id, true);
+    await backlog.purge('k8s', a.id);
+    const raw = await readFile(dayFile(), 'utf8');
+    expect(raw).not.toContain('Pods are mortal');
+    expect(raw).not.toContain(a.id);
+    expect((await backlog.listPoints('k8s')).map((p) => p.id)).toEqual([b.id]);
+    await expect(backlog.purge('k8s', a.id)).rejects.toThrow(/not found/);
+  });
+
   it('finds local duplicates of live points only', async () => {
     const a = await backlog.add('k8s', 'ClusterIP services are only reachable inside the cluster');
     expect(await backlog.findDuplicate('k8s', 'clusterip services are only reachable INSIDE the cluster.')).toMatchObject({

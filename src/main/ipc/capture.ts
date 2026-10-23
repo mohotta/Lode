@@ -33,7 +33,7 @@ export function registerCaptureHandlers(registry: VaultRegistry): void {
   );
   handle('folder:delete', async ({ vaultId, folder }) => (await registry.get(vaultId)).service.deleteFolder(folder));
 
-  // The only backlog write paths (invariant 1): add, edit and soft delete, all user-initiated.
+  // The only backlog write paths (invariant 1): add, edit, soft delete and purge, all user-initiated.
   handle('backlog:add', async ({ vaultId, folder, text, date, force }): Promise<AddResult> => {
     const v = await registry.get(vaultId);
     // Local check only (no network, invariant 8). Exact repeats are refused even when forced.
@@ -48,6 +48,9 @@ export function registerCaptureHandlers(registry: VaultRegistry): void {
   );
   handle('backlog:softDelete', async ({ vaultId, folder, id, deleted }) =>
     (await registry.get(vaultId)).backlog.setDeleted(folder, id as PointId, deleted),
+  );
+  handle('backlog:purge', async ({ vaultId, folder, id }) =>
+    (await registry.get(vaultId)).backlog.purge(folder, id as PointId),
   );
 
   handle('backlog:listDays', async ({ vaultId, folder }) => {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ResolvedBlock } from '@shared/types';
 import { dayMonth, shortDate } from '../dates';
-import { DotsIcon, PencilIcon, TrashIcon, WarnIcon } from './Icons';
+import { BanIcon, DotsIcon, PencilIcon, WarnIcon } from './Icons';
 import { Markdown } from './Markdown';
 import { Menu } from './Menu';
 import { PointEditor } from './PointEditor';
@@ -29,7 +29,7 @@ export function PointBlock({ block, fixes = [], ...a }: { block: PointB; fixes?:
         <span />
         <p className="removed-line">
           <WarnIcon size={13} />
-          <span>{block.missing ? 'This point is no longer in the backlog' : 'You removed this point'}</span>
+          <span>{block.missing ? 'This point is no longer in the backlog' : 'You disabled this point'}</span>
           {block.deleted && (
             <button className="link-btn" onClick={() => void a.onSetDeleted(block.id, false)}>
               Restore
@@ -74,9 +74,8 @@ export function PointBlock({ block, fixes = [], ...a }: { block: PointB; fixes?:
                 { label: 'Edit', icon: <PencilIcon size={14} />, onSelect: () => setEditing(true) },
                 'separator',
                 {
-                  label: 'Delete',
-                  icon: <TrashIcon size={14} />,
-                  danger: true,
+                  label: 'Disable',
+                  icon: <BanIcon size={14} />,
                   onSelect: () => void a.onSetDeleted(block.id, true),
                 },
               ]}

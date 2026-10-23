@@ -8,6 +8,7 @@ import {
   isCalendarDate,
   normalisePointText,
   parseBacklog,
+  removeEntry,
   replaceEntryText,
   setTombstone,
   type BacklogFile,
@@ -181,6 +182,20 @@ export class BacklogRepo {
       const existing = await readTextOrNull(path);
       if (existing === null) throw new Error('Point not found');
       await atomicWrite(path, setTombstone(existing, date, id, deleted));
+    });
+  }
+
+  /**
+   * User-initiated only (`backlog:purge`). Permanently removes a point the user has already
+   * disabled (soft-deleted); a live point is refused, so this is always a second, deliberate step.
+   */
+  async purge(folder: string, id: PointId): Promise<void> {
+    const { path, date } = await this.dayFileOf(folder, id);
+    await this.vault.locks.run(path, async () => {
+      const existing = await readTextOrNull(path);
+      if (existing === null) throw new Error('Point not found');
+      if (!parseBacklog(existing, date).deleted.includes(id)) throw new Error('Disable the point before deleting it');
+      await atomicWrite(path, removeEntry(existing, date, id));
     });
   }
 
