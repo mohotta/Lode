@@ -116,12 +116,12 @@ export function Sidebar(p: Props): React.JSX.Element {
               <kbd>Ctrl K</kbd>
             </button>
             <div className="nav-items">
-              <button className={`tree-item ${p.reviewOpen ? 'selected' : ''}`} onClick={p.onOpenReview}>
+              <button className={`tree-item review-item ${p.reviewOpen ? 'selected' : ''} ${p.reviewCount > 0 ? 'has-due' : ''}`} onClick={p.onOpenReview}>
                 <ReviewIcon size={15} className="tree-icon" />
                 <span className="tree-label">Review</span>
                 {p.reviewCount > 0 && (
                   <span className="tree-count due" aria-label={`${p.reviewCount} due`}>
-                    {p.reviewCount} due
+                    {p.reviewCount}
                   </span>
                 )}
               </button>
