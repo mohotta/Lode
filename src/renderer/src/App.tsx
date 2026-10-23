@@ -12,6 +12,8 @@ import type {
 } from '@shared/types';
 import { ask, lode, unwrap } from './api';
 import { BacklogView } from './components/BacklogView';
+import { ConfirmHost } from './components/ConfirmHost';
+import { MissingVault } from './components/MissingVault';
 import { DigestPicker } from './components/DigestPicker';
 import { GenerateDialog, type DialogTarget } from './components/GenerateDialog';
 import { SettingsView } from './components/SettingsView';
@@ -22,14 +24,16 @@ import { ReviewView } from './components/ReviewView';
 import { SearchView } from './components/SearchView';
 import { StatusBar } from './components/StatusBar';
 import { TrashView } from './components/TrashView';
-import { CloseIcon } from './components/Icons';
+import { CloseIcon, FolderIcon, WarnIcon } from './components/Icons';
+import { EmptyState } from './components/EmptyState';
+import appIcon from '../../../build/icon.svg';
 import { DIGEST_PREFIX, NotePane } from './components/NotePane';
 import { isActive } from './jobs';
 import { Resizer } from './components/Resizer';
 import { BACKLOG, NOTE_MIN, SIDEBAR, usePaneWidths } from './layout';
 import { useAccent, useTheme } from './theme';
 
-type Page = 'main' | 'settings' | 'trash' | 'review' | 'search';
+type Page = 'main' | 'settings' | 'trash' | 'review';
 
 /** One place the user has been: a folder, and optionally a note in it. Back/forward walk these. */
 interface Place {
@@ -65,6 +69,10 @@ const message = (e: unknown): string => (e instanceof Error ? e.message : String
 
 export function App(): React.JSX.Element {
   const [vaults, setVaults] = useState<VaultInfo[]>([]);
+  const vaultsRef = useRef(vaults);
+  useEffect(() => {
+    vaultsRef.current = vaults;
+  }, [vaults]);
   const [vaultId, setVaultId] = useState<string | null>(null);
   const [folders, setFolders] = useState<FolderInfo[]>([]);
   const [history, setHistory] = useState<History>(EMPTY_HISTORY);
@@ -84,10 +92,15 @@ export function App(): React.JSX.Element {
   const [trash, setTrash] = useState<TrashItem[]>([]);
   const [review, setReview] = useState<ReviewItem[]>([]);
   const [query, setQuery] = useState('');
+  // Search is an overlay above whatever page is open.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
   /** A point to scroll to once its folder has loaded (set by handlers, consumed after load). */
   const pendingJump = useRef<string | null>(null);
   const scratchRef = useRef<RichEditorHandle>(null);
   const [theme, setTheme] = useTheme();
+  // Stable, so the pages' Escape listener isn't re-registered on every render.
+  const closePage = useCallback(() => setPage('main'), []);
   const [accent, setAccent] = useAccent();
   const [widths, setWidths] = usePaneWidths();
 
@@ -105,7 +118,21 @@ export function App(): React.JSX.Element {
       return await fn();
     } catch (e) {
       setError(message(e));
+      // The vault folder may have gone away underneath us; refresh so the panel can say so.
+      void lode.vault.list().then((r) => r.ok && setVaults(r.value.vaults));
       return undefined;
+    }
+  }, []);
+
+  // Re-checks which vault folders exist (read-only). Run on focus and after a failed action,
+  // so a vault or folder deleted outside Lode shows the missing-vault panel instead of errors.
+  const refreshVaults = useCallback(async (): Promise<VaultInfo[] | null> => {
+    try {
+      const { vaults: vs } = await unwrap(lode.vault.list());
+      setVaults(vs);
+      return vs;
+    } catch {
+      return null;
     }
   }, []);
 
@@ -144,6 +171,26 @@ export function App(): React.JSX.Element {
     if (vaultId && folder) await guard(() => load(vaultId, folder));
   }, [vaultId, folder, guard, load]);
 
+  // Coming back to the window: pick up vaults, folders and notes changed or deleted outside Lode.
+  useEffect(() => {
+    const onFocus = (): void => {
+      void (async () => {
+        const vs = await refreshVaults();
+        const v = vs?.find((x) => x.id === vaultId);
+        if (!vaultId || !v || v.missing) return;
+        try {
+          const fs = await unwrap(lode.folder.list(vaultId));
+          setFolders(fs);
+          if (folder && fs.some((f) => f.slug === folder)) await refreshFolder();
+        } catch {
+          // Reported by the next action that needs it.
+        }
+      })();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [vaultId, folder, refreshVaults, refreshFolder]);
+
   // Scroll to a point requested from another page once its folder's backlog is on screen.
   useEffect(() => {
     const id = pendingJump.current;
@@ -169,7 +216,15 @@ export function App(): React.JSX.Element {
   }, []);
 
   const selectVault = useCallback(
-    async (id: string) => {
+    async (id: string, known?: VaultInfo[]) => {
+      if ((known ?? vaultsRef.current).find((v) => v.id === id)?.missing) {
+        setVaultId(id);
+        setFolders([]);
+        setHistory(EMPTY_HISTORY);
+        setTrash([]);
+        setReview([]);
+        return;
+      }
       await guard(async () => {
         const fs = await unwrap(lode.folder.list(id));
         setVaultId(id);
@@ -188,7 +243,7 @@ export function App(): React.JSX.Element {
         if (cancelled) return;
         setVaults(vs);
         const last = vs.find((v) => v.id === lastVaultId) ?? vs.at(-1);
-        if (last) void selectVault(last.id);
+        if (last) void selectVault(last.id, vs);
       },
       (e: unknown) => !cancelled && setError(message(e)),
     );
@@ -220,7 +275,7 @@ export function App(): React.JSX.Element {
     const onKey = (e: KeyboardEvent): void => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setPage('search');
+        setSearchOpen(true);
         return;
       }
       // Single-key shortcuts, only when no field or menu has focus: n new point, j/k move through points.
@@ -332,6 +387,19 @@ export function App(): React.JSX.Element {
     await refreshFolder();
   };
 
+  const purgePoint = async (id: string): Promise<void> => {
+    if (!vaultId || !folder) return;
+    const ok = await ask({
+      message: 'Delete this point permanently?',
+      detail: 'It is removed from your backlog file and cannot be restored. Notes that cite it will show it as missing.',
+      confirmLabel: 'Delete permanently',
+      danger: true,
+    });
+    if (!ok) return;
+    await guard(() => unwrap(lode.backlog.purge(vaultId, folder, id)));
+    await refreshFolder();
+  };
+
   const deleteNote = async (slug: string, title: string): Promise<void> => {
     if (!vaultId || !folder) return;
     const ok = await ask({
@@ -355,6 +423,8 @@ export function App(): React.JSX.Element {
   };
 
   const folderInfo = folders.find((f) => f.slug === folder);
+  const activeVault = vaults.find((v) => v.id === vaultId);
+  const activeMissing = !!activeVault?.missing;
   /** Point ID → the notes it is filed in, for the reader's "Also in" links. */
   const filedIn = useMemo(
     () => new Map(days.flatMap((d) => d.points).map((pt) => [pt.id, pt.filedUnder] as const)),
@@ -431,7 +501,7 @@ export function App(): React.JSX.Element {
 
   return (
     <div
-      className={`app ${page !== 'main' ? 'with-settings' : ''}`}
+      className={`app ${page !== 'main' || activeMissing ? 'with-settings' : ''}`}
       style={
         {
           '--side-w': `${widths.sidebar}px`,
@@ -443,16 +513,24 @@ export function App(): React.JSX.Element {
       <Sidebar
         vaults={vaults}
         activeVaultId={vaultId}
-        folders={folders}
+        folders={activeMissing ? [] : folders}
         activeFolder={folder}
         subtopics={subtopics}
         activeSubtopic={subtopic}
         settingsOpen={page === 'settings'}
         trashOpen={page === 'trash'}
-        trashCount={trash.length}
+        trashCount={activeMissing ? 0 : trash.length}
         reviewOpen={page === 'review'}
-        reviewCount={review.length}
-        searchOpen={page === 'search'}
+        reviewCount={activeMissing ? 0 : review.length}
+        searchOpen={searchOpen}
+        activity={
+          <StatusBar
+            jobs={jobs}
+            onOpen={(id) => setDialog({ kind: 'job', jobId: id })}
+            onCancel={(id) => void lode.generate.cancel(id)}
+            onDismiss={(id) => void lode.generate.dismiss(id)}
+          />
+        }
         resizer={
           <Resizer
             label="Resize sidebar"
@@ -467,7 +545,7 @@ export function App(): React.JSX.Element {
           setPage('review');
           if (vaultId) void loadReview(vaultId);
         }}
-        onOpenSearch={() => setPage('search')}
+        onOpenSearch={() => setSearchOpen(true)}
         theme={theme}
         onTheme={setTheme}
         onSelectVault={(id) => {
@@ -519,22 +597,77 @@ export function App(): React.JSX.Element {
 
       {error && (
         <div className="toast error" role="alert">
-          <span>{error}</span>
+          <span className="toast-icon" aria-hidden="true">
+            <WarnIcon size={14} />
+          </span>
+          <span className="toast-text">{error}</span>
           <button className="icon-btn" aria-label="Dismiss error" onClick={() => setError(null)}>
             <CloseIcon size={14} />
           </button>
         </div>
       )}
 
-      {page === 'settings' ? (
+      {activeMissing && activeVault && page === 'main' ? (
+        <main className="settings-page" aria-label="Missing vault">
+          <MissingVault
+            vault={activeVault}
+            onOpenOther={() => void openVault()}
+            onRetry={() =>
+              void guard(async () => {
+                const vs = await refreshVaults();
+                if (vs && !vs.find((v) => v.id === activeVault.id)?.missing) await selectVault(activeVault.id, vs);
+              })
+            }
+            onLocate={() =>
+              void guard(async () => {
+                // The picked folder becomes the vault; the stale entry is dropped (no files touched).
+                const v = await unwrap(lode.vault.open());
+                if (!v) return;
+                if (v.id !== activeVault.id) await unwrap(lode.vault.forget(activeVault.id));
+                const vs = await refreshVaults();
+                await selectVault(v.id, vs ?? undefined);
+              })
+            }
+            onRecreate={() =>
+              void guard(async () => {
+                await unwrap(lode.vault.recreate(activeVault.id));
+                const vs = await refreshVaults();
+                await selectVault(activeVault.id, vs ?? undefined);
+              })
+            }
+            onForget={() =>
+              void ask({
+                message: `Remove “${activeVault.name}” from the list?`,
+                detail: 'No files are deleted. You can open the folder again later.',
+                confirmLabel: 'Remove from list',
+              }).then(async (ok) => {
+                if (!ok) return;
+                await guard(async () => {
+                  await unwrap(lode.vault.forget(activeVault.id));
+                  const vs = (await refreshVaults()) ?? [];
+                  const next = vs.find((v) => !v.missing) ?? vs[0];
+                  if (next) await selectVault(next.id, vs);
+                  else setVaultId(null);
+                });
+              })
+            }
+          />
+        </main>
+      ) : page === 'settings' ? (
         <main className="settings-page" aria-label="Settings">
-          <SettingsView onClose={() => setPage('main')} accent={accent} onAccent={setAccent} />
+          <SettingsView
+            onClose={closePage}
+            accent={accent}
+            onAccent={setAccent}
+            theme={theme}
+            onTheme={setTheme}
+          />
         </main>
       ) : page === 'review' && vaultId ? (
         <main className="settings-page" aria-label="Review">
           <ReviewView
             items={review}
-            onClose={() => setPage('main')}
+            onClose={closePage}
             onShowPoint={showPoint}
             onOpenNote={(f, s) => navigate({ folder: f, subtopic: s })}
             onMark={async (items) => {
@@ -543,23 +676,12 @@ export function App(): React.JSX.Element {
             }}
           />
         </main>
-      ) : page === 'search' && vaultId ? (
-        <main className="settings-page" aria-label="Search">
-          <SearchView
-            vaultId={vaultId}
-            query={query}
-            onQuery={setQuery}
-            onClose={() => setPage('main')}
-            onOpenPoint={showPoint}
-            onOpenNote={(f, note, digest) => navigate({ folder: f, subtopic: digest ? `digest:${note}` : note })}
-          />
-        </main>
       ) : page === 'trash' ? (
         <main className="settings-page" aria-label="Trash">
           <TrashView
             items={trash}
             folders={folders}
-            onClose={() => setPage('main')}
+            onClose={closePage}
             onRestore={async (item) => {
               if (!vaultId) return;
               await guard(async () => {
@@ -626,29 +748,34 @@ export function App(): React.JSX.Element {
                     onJumpToPoint={jumpToPoint}
                     onEdit={editPoint}
                     onSetDeleted={setPointDeleted}
+                    onPurge={purgePoint}
                   />
                 </div>
               </>
             ) : (
-              <div className="welcome">
-                <h1>Lode</h1>
-                <p>
-                  {vaults.length === 0
-                    ? 'Capture what you learn, one line at a time. Open or create a vault to begin.'
-                    : 'Pick a folder, or create one, and add what you learned today.'}
-                </p>
-                {vaults.length === 0 && (
-                  <button className="btn primary" onClick={() => void openVault()}>
-                    Open or create a vault
-                  </button>
-                )}
-              </div>
+              vaults.length === 0 ? (
+                <EmptyState
+                  icon={<img src={appIcon} alt="" width={30} height={30} />}
+                  title="Welcome to Lode"
+                  actions={
+                    <button className="btn primary tall" onClick={() => void openVault()}>
+                      Open or create a vault
+                    </button>
+                  }
+                >
+                  Capture what you learn, one line at a time. A vault is a folder of plain markdown files on your disk.
+                </EmptyState>
+              ) : (
+                <EmptyState icon={<FolderIcon size={18} />} title="Pick a folder">
+                  Choose a folder in the sidebar, or create one with +, then add what you learned today.
+                </EmptyState>
+              )
             )}
           </main>
 
           <NotePane
             vaultId={vaultId}
-            folder={folder}
+            folder={folderInfo ? folder : null}
             folderTitle={folderInfo?.title ?? null}
             subtopics={subtopics}
             active={subtopic}
@@ -668,6 +795,8 @@ export function App(): React.JSX.Element {
             onEditPoint={editPoint}
             onSetPointDeleted={setPointDeleted}
             digests={digests}
+            days={days}
+            onAddPoint={() => scratchRef.current?.focus()}
             filedIn={filedIn}
             onNewDigest={() => setPickingDigest(true)}
             onRegenerateDigest={openDigestDialog}
@@ -676,12 +805,25 @@ export function App(): React.JSX.Element {
         </>
       )}
 
-      <StatusBar
-        jobs={jobs}
-        onOpen={(id) => setDialog({ kind: 'job', jobId: id })}
-        onCancel={(id) => void lode.generate.cancel(id)}
-        onDismiss={(id) => void lode.generate.dismiss(id)}
-      />
+
+      <ConfirmHost />
+
+      {searchOpen && vaultId && (
+        <SearchView
+          vaultId={vaultId}
+          query={query}
+          onQuery={setQuery}
+          onClose={closeSearch}
+          onOpenPoint={(f, id) => {
+            setSearchOpen(false);
+            showPoint(f, id);
+          }}
+          onOpenNote={(f, note, digest) => {
+            setSearchOpen(false);
+            navigate({ folder: f, subtopic: digest ? `digest:${note}` : note });
+          }}
+        />
+      )}
 
       {pickingDigest && vaultId && folder && folderInfo && (
         <DigestPicker
@@ -692,6 +834,10 @@ export function App(): React.JSX.Element {
           onPick={(period: DigestPeriod) => {
             setPickingDigest(false);
             openDigestDialog(period.id, period.title);
+          }}
+          onOpen={(period: DigestPeriod) => {
+            setPickingDigest(false);
+            if (folder) navigate({ folder, subtopic: `${DIGEST_PREFIX}${period.id}` });
           }}
         />
       )}

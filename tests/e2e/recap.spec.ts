@@ -50,7 +50,7 @@ test.afterEach(async () => {
   await removeDir(l.userData);
 });
 
-test('review, search, My points only and a weekly digest', async () => {
+test('review, search, Only mine and a weekly digest', async () => {
   const { page, vaultRoot } = l;
   const before = await hashBacklogs(vaultRoot);
 
@@ -84,33 +84,34 @@ test('review, search, My points only and a weekly digest', async () => {
   const noteHeading = page.getByRole('heading', { level: 2, name: 'Services' });
   await expect(noteHeading).toBeVisible();
 
-  // --- My points only hides AI blocks but keeps the user's highlighted point.
+  // --- Only mine hides AI blocks but keeps the user's highlighted point.
   const note = page.getByRole('region', { name: 'Services' });
   await expect(note.getByRole('article', { name: 'AI-generated explanation' })).toHaveCount(1);
-  await page.getByRole('button', { name: 'My points', exact: true }).click();
+  await page.getByRole('button', { name: 'Only mine', exact: true }).click();
   await expect(note.getByRole('article', { name: 'AI-generated explanation' })).toHaveCount(0);
   await expect(note.getByRole('article', { name: /Your point from/ })).toHaveCount(1);
-  await page.getByRole('button', { name: 'My points', exact: true }).click();
+  await page.getByRole('button', { name: 'All', exact: true }).click();
 
   // --- Keys, then a weekly digest through the background queue.
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByLabel('LLM API key API key').fill('sk-e2e-fake-key');
   await page.getByRole('group', { name: 'LLM API key' }).getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Saved to secure storage')).toBeVisible();
-  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Close settings' }).click();
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', { name: 'Kubernetes' }).click();
   await page.getByRole('button', { name: 'New digest' }).click();
   const picker = page.getByRole('dialog');
-  await picker.getByRole('tab', { name: 'Monthly' }).click();
-  await picker.getByRole('tab', { name: 'Weekly' }).click();
-  await picker.getByRole('list', { name: 'Periods' }).getByRole('button').first().click();
+  await picker.getByRole('button', { name: 'Monthly' }).click();
+  await picker.getByRole('button', { name: 'Weekly' }).click();
+  await expect(picker.getByRole('radiogroup', { name: 'Periods' }).getByRole('radio', { checked: true })).toHaveCount(1);
+  await picker.getByRole('button', { name: 'Create digest' }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: /^Digest · / })).toBeVisible();
-  await dialog.getByRole('button', { name: /^Write digest from \d+ point\(s\)$/ }).click();
-  await expect(page.getByRole('contentinfo', { name: 'Background jobs' }).getByText('Written')).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Write digest' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Write digest', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Background jobs' }).getByText('Written')).toBeVisible();
   await page.getByRole('list', { name: 'Digests' }).getByRole('button').first().click();
   const digest = page.getByRole('region').filter({ hasText: 'Recap of Week' });
-  await expect(digest.getByText(/Digest ·/)).toBeVisible();
+  await expect(digest.getByText(/Weekly digest/)).toBeVisible();
   await expect(digest.getByRole('article', { name: /Your point from/ }).first()).toBeVisible();
   await expect(digest.getByRole('heading', { name: 'Service networking' })).toBeVisible();
   await page.screenshot({ path: 'test-results/digest.png' });

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import type { FolderInfo, SubtopicInfo, VaultInfo } from '@shared/types';
+import appIcon from '../../../../build/icon.svg';
 import { ask } from '../api';
 import type { ThemePref } from '../theme';
 import {
@@ -16,6 +17,7 @@ import {
   SearchIcon,
   SunIcon,
   TrashIcon,
+  UpDownIcon,
 } from './Icons';
 import { Menu } from './Menu';
 
@@ -50,6 +52,8 @@ interface Props {
   onOpenSearch(): void;
   /** Drag handle on the right edge (see Resizer). */
   resizer?: React.ReactNode;
+  /** Background job cards, shown above the footer buttons. */
+  activity?: React.ReactNode;
 }
 
 const NEXT_THEME: Record<ThemePref, ThemePref> = { system: 'dark', dark: 'light', light: 'system' };
@@ -86,13 +90,14 @@ export function Sidebar(p: Props): React.JSX.Element {
           triggerClassName="vault-switch"
           trigger={
             <>
+              <img className="vault-tile" src={appIcon} alt="" aria-hidden="true" />
               <span className="vault-name">{vault?.name ?? 'No vault'}</span>
-              <ChevronDownIcon size={14} className="vault-chevron" />
+              <UpDownIcon size={14} className="vault-chevron" />
             </>
           }
           items={[
             ...p.vaults.map((v) => ({
-              label: v.name,
+              label: v.missing ? `${v.name} (folder missing)` : v.name,
               checked: v.id === p.activeVaultId,
               onSelect: () => p.onSelectVault(v.id),
             })),
@@ -102,21 +107,23 @@ export function Sidebar(p: Props): React.JSX.Element {
         />
         {vault && (
           <button
-            className={`icon-btn ${p.searchOpen ? 'selected' : ''}`}
+            className={`icon-btn side-search-btn ${p.searchOpen ? 'selected' : ''}`}
             aria-label="Search"
             title="Search points and notes (Ctrl+K)"
             onClick={p.onOpenSearch}
           >
-            <SearchIcon size={15} />
+            <SearchIcon size={16} />
           </button>
         )}
       </div>
 
       <div className="sidebar-scroll">
-        {vault ? (
+        {vault?.missing ? (
+          <p className="sidebar-empty">This vault's folder is missing. Choose what to do on the right.</p>
+        ) : vault ? (
           <>
             <div className="nav-items">
-              <button className={`tree-item ${p.reviewOpen ? 'selected' : ''}`} onClick={p.onOpenReview}>
+              <button className={`tree-item review-item ${p.reviewOpen ? 'selected' : ''} ${p.reviewCount > 0 ? 'has-due' : ''}`} onClick={p.onOpenReview}>
                 <ReviewIcon size={15} className="tree-icon" />
                 <span className="tree-label">Review</span>
                 {p.reviewCount > 0 && (
@@ -300,15 +307,11 @@ export function Sidebar(p: Props): React.JSX.Element {
             </ul>
           </>
         ) : (
-          <div className="sidebar-empty">
-            <p>A vault is a folder of plain markdown files on your disk.</p>
-            <button className="btn primary block" onClick={p.onOpenVault}>
-              Open or create a vault
-            </button>
-          </div>
+          <p className="sidebar-empty">No vault open. Your folders will show here.</p>
         )}
       </div>
 
+      {p.activity}
       <div className="sidebar-footer">
         <button className={`tree-item ${p.settingsOpen ? 'selected' : ''}`} onClick={p.onOpenSettings}>
           <GearIcon size={15} className="tree-icon" />

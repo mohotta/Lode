@@ -12,6 +12,7 @@ const api: LodeApi = {
     list: () => call('vault:list')(),
     open: () => call('vault:open')(),
     forget: (vaultId) => call('vault:forget')({ vaultId }),
+    recreate: (vaultId) => call('vault:recreate')({ vaultId }),
   },
   folder: {
     list: (vaultId) => call('folder:list')({ vaultId }),
@@ -30,6 +31,7 @@ const api: LodeApi = {
       }),
     edit: (vaultId, folder, id, text) => call('backlog:edit')({ vaultId, folder, id, text }),
     softDelete: (vaultId, folder, id, deleted) => call('backlog:softDelete')({ vaultId, folder, id, deleted }),
+    purge: (vaultId, folder, id) => call('backlog:purge')({ vaultId, folder, id }),
     listDays: (vaultId, folder) => call('backlog:listDays')({ vaultId, folder }),
   },
   notes: {
@@ -59,9 +61,6 @@ const api: LodeApi = {
   },
   link: {
     open: (url) => call('link:open')({ url }),
-  },
-  ui: {
-    confirm: (opts) => call('ui:confirm')(opts),
   },
   settings: {
     get: () => call('settings:get')(),

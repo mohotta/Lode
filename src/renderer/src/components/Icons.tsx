@@ -194,6 +194,52 @@ export const UndoIcon = (p: P): React.JSX.Element => (
   </Svg>
 );
 
+export const FolderPlusIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M2.5 4.5a1 1 0 011-1h3l1.5 1.5h4.5a1 1 0 011 1v6a1 1 0 01-1 1h-9a1 1 0 01-1-1z" />
+    <path d="M8 7v3.5M6.25 8.75h3.5" />
+  </Svg>
+);
+
+export const ArrowUpRightIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M5 11l6-6M6.5 5H11v4.5" />
+  </Svg>
+);
+
+export const UpDownIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M5.5 6L8 3.5 10.5 6M5.5 10L8 12.5 10.5 10" />
+  </Svg>
+);
+
+export const InfoIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <circle cx="8" cy="8" r="6" />
+    <path d="M8 7.3v3.7M8 5.2v.1" />
+  </Svg>
+);
+
+export const LockIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" />
+    <path d="M5.5 7V5a2.5 2.5 0 015 0v2" />
+  </Svg>
+);
+
+export const ShieldIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M8 2l5 2v3.5c0 3-2.2 5.4-5 6-2.8-.6-5-3-5-6V4z" />
+  </Svg>
+);
+
+export const BanIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <circle cx="8" cy="8" r="5.5" />
+    <path d="M4.1 11.9l7.8-7.8" />
+  </Svg>
+);
+
 export const CopyIcon = (p: P): React.JSX.Element => (
   <Svg {...p}>
     <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />

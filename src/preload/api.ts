@@ -25,6 +25,8 @@ export interface LodeApi {
     list(): R<{ vaults: VaultInfo[]; lastVaultId: string | null }>;
     open(): R<VaultInfo | null>;
     forget(vaultId: string): R<void>;
+    /** Creates a missing vault's folder again, empty, at the same path. */
+    recreate(vaultId: string): R<VaultInfo>;
   };
   folder: {
     list(vaultId: string): R<FolderInfo[]>;
@@ -41,6 +43,8 @@ export interface LodeApi {
     edit(vaultId: string, folder: string, id: string, text: string): R<Point>;
     /** Soft delete (tombstone) or restore. The text is kept either way. */
     softDelete(vaultId: string, folder: string, id: string, deleted: boolean): R<void>;
+    /** Permanently removes a disabled point from its day file. Refused for a live point. */
+    purge(vaultId: string, folder: string, id: string): R<void>;
     listDays(vaultId: string, folder: string): R<BacklogDay[]>;
   };
   notes: {
@@ -74,10 +78,6 @@ export interface LodeApi {
   };
   link: {
     open(url: string): R<void>;
-  };
-  ui: {
-    /** Native OS confirmation box; resolves true when the user confirms. */
-    confirm(opts: { message: string; detail?: string; confirmLabel: string; danger?: boolean }): R<boolean>;
   };
   settings: {
     get(): R<SettingsView>;

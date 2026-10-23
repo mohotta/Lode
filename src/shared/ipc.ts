@@ -24,6 +24,8 @@ export const Schemas = {
   'vault:list': z.object({}),
   'vault:open': z.object({}),
   'vault:forget': z.object({ vaultId }),
+  /** Creates a missing vault's folder again (empty) at its recorded path. User-initiated only. */
+  'vault:recreate': z.object({ vaultId }),
   'folder:list': z.object({ vaultId }),
   'folder:create': z.object({ vaultId, title: z.string().min(1).max(200) }),
   'folder:rename': z.object({ vaultId, folder: slug, title: z.string().min(1).max(200) }),
@@ -42,6 +44,8 @@ export const Schemas = {
   }),
   'backlog:edit': z.object({ vaultId, folder: slug, id: pointId, text: z.string().min(1).max(4000) }),
   'backlog:softDelete': z.object({ vaultId, folder: slug, id: pointId, deleted: z.boolean() }),
+  /** Permanently removes a point the user has already disabled. */
+  'backlog:purge': z.object({ vaultId, folder: slug, id: pointId }),
   'backlog:listDays': z.object({ vaultId, folder: slug }),
   'notes:list': z.object({ vaultId, folder: slug }),
   'notes:read': z.object({ vaultId, folder: slug, subtopic: slug }),
@@ -66,12 +70,6 @@ export const Schemas = {
   'digest:read': z.object({ vaultId, folder: slug, digest: digestId }),
   'digest:delete': z.object({ vaultId, folder: slug, digest: digestId }),
   'link:open': z.object({ url: z.string().url().max(2048) }),
-  'ui:confirm': z.object({
-    message: z.string().min(1).max(300),
-    detail: z.string().max(1000).optional(),
-    confirmLabel: z.string().min(1).max(40),
-    danger: z.boolean().optional(),
-  }),
   'settings:get': z.object({}),
   'settings:set': z.object({
     allowWeakKeyStorage: z.boolean().optional(),

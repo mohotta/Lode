@@ -30,7 +30,7 @@ export function useTheme(): [ThemePref, (t: ThemePref) => void] {
 
 /** Accent colours: a light-theme and a dark-theme shade of each, both readable on their background. */
 export const ACCENTS = {
-  amber: { label: 'Amber', light: '#b4761c', dark: '#e8b65a' },
+  amber: { label: 'Amber', light: '#a8500a', dark: '#e8a94e' },
   blue: { label: 'Blue', light: '#2f6fd6', dark: '#7aa7ff' },
   green: { label: 'Green', light: '#2f8a4c', dark: '#5ac17d' },
   teal: { label: 'Teal', light: '#11827a', dark: '#4fc7bb' },

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { mkdir, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { VaultInfo } from '@shared/types';
 import { SearchIndex } from '@core/index/SearchIndex';
@@ -35,6 +36,28 @@ export class VaultRegistry {
 
   async list(): Promise<VaultInfo[]> {
     return (await this.settings.get()).vaults;
+  }
+
+  /** Known vaults, each checked on disk (read-only: a missing folder is reported, never created). */
+  async listWithStatus(): Promise<VaultInfo[]> {
+    const isDir = (p: string): Promise<boolean> => stat(p).then((s) => s.isDirectory(), () => false);
+    return Promise.all((await this.list()).map(async (v) => ({ ...v, missing: !(await isDir(v.path)) })));
+  }
+
+  /**
+   * User-initiated only (`vault:recreate`, after the app showed the folder as missing): creates the
+   * vault folder again, empty, at its recorded path. Refused if something is already there.
+   */
+  async recreate(id: string): Promise<VaultInfo> {
+    const info = (await this.list()).find((v) => v.id === id);
+    if (!info) throw new Error('Unknown vault');
+    const there = await stat(info.path).then(() => true, () => false);
+    if (there) throw new Error(`"${info.path}" already exists. Open it instead.`);
+    await mkdir(info.path, { recursive: true });
+    this.open.get(id)?.index.close();
+    this.open.delete(id);
+    await new VaultService(new Vault(info.path)).init();
+    return info;
   }
 
   async lastVaultId(): Promise<string | null> {

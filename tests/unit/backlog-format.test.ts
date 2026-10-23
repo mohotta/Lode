@@ -4,7 +4,9 @@ import {
   isCalendarDate,
   normalisePointText,
   parseBacklog,
+  removeEntry,
   serialiseBacklog,
+  setTombstone,
   type BacklogFile,
 } from '@core/formats/backlog';
 
@@ -64,6 +66,36 @@ describe('backlog format', () => {
     expect(() => normalisePointText('   \n ')).toThrow(/empty/);
     expect(() => normalisePointText('sneaky ^p-12345678')).toThrow(/block ID/);
     expect(() => normalisePointText('x'.repeat(4001))).toThrow(/limited/);
+  });
+});
+
+describe('removeEntry (permanent delete)', () => {
+  const MULTI = `---
+date: 2026-10-17
+deleted: []
+---
+- First point ^p-aaaaaaaa
+- Second point
+  with a code block:
+  \`\`\`
+  kubectl get pods
+  \`\`\` ^p-bbbbbbbb
+- Third point ^p-cccccccc
+`;
+
+  it('removes a multi-line entry and its tombstone; other entries keep their bytes', () => {
+    expect(parseBacklog(MULTI, '2026-10-17').entries.map((e) => e.id)).toEqual(['p-aaaaaaaa', 'p-bbbbbbbb', 'p-cccccccc']);
+    const disabled = setTombstone(MULTI, '2026-10-17', 'p-bbbbbbbb', true);
+    const out = removeEntry(disabled, '2026-10-17', 'p-bbbbbbbb');
+    const f = parseBacklog(out, '2026-10-17');
+    expect(f.deleted).toEqual([]);
+    expect(f.entries.map((e) => e.id)).toEqual(['p-aaaaaaaa', 'p-cccccccc']);
+    expect(out).toContain('- First point ^p-aaaaaaaa\n- Third point ^p-cccccccc\n');
+    expect(out).not.toContain('kubectl');
+  });
+
+  it('refuses an unknown ID', () => {
+    expect(() => removeEntry(MULTI, '2026-10-17', 'p-zzzzzzzz')).toThrow(/not found/);
   });
 });
 

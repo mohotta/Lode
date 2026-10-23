@@ -7,7 +7,7 @@ import { handle } from './handle';
 
 export function registerCaptureHandlers(registry: VaultRegistry): void {
   handle('vault:list', async () => ({
-    vaults: await registry.list(),
+    vaults: await registry.listWithStatus(),
     lastVaultId: await registry.lastVaultId(),
   }));
 
@@ -25,6 +25,7 @@ export function registerCaptureHandlers(registry: VaultRegistry): void {
   });
 
   handle('vault:forget', async ({ vaultId }) => registry.forget(vaultId));
+  handle('vault:recreate', async ({ vaultId }) => registry.recreate(vaultId));
 
   handle('folder:list', async ({ vaultId }) => (await registry.get(vaultId)).service.listFolders());
   handle('folder:create', async ({ vaultId, title }) => (await registry.get(vaultId)).service.createFolder(title));
@@ -33,7 +34,7 @@ export function registerCaptureHandlers(registry: VaultRegistry): void {
   );
   handle('folder:delete', async ({ vaultId, folder }) => (await registry.get(vaultId)).service.deleteFolder(folder));
 
-  // The only backlog write paths (invariant 1): add, edit and soft delete, all user-initiated.
+  // The only backlog write paths (invariant 1): add, edit, soft delete and purge, all user-initiated.
   handle('backlog:add', async ({ vaultId, folder, text, date, force }): Promise<AddResult> => {
     const v = await registry.get(vaultId);
     // Local check only (no network, invariant 8). Exact repeats are refused even when forced.
@@ -48,6 +49,9 @@ export function registerCaptureHandlers(registry: VaultRegistry): void {
   );
   handle('backlog:softDelete', async ({ vaultId, folder, id, deleted }) =>
     (await registry.get(vaultId)).backlog.setDeleted(folder, id as PointId, deleted),
+  );
+  handle('backlog:purge', async ({ vaultId, folder, id }) =>
+    (await registry.get(vaultId)).backlog.purge(folder, id as PointId),
   );
 
   handle('backlog:listDays', async ({ vaultId, folder }) => {
@@ -112,23 +116,6 @@ export function registerCaptureHandlers(registry: VaultRegistry): void {
 
   // Local only: the index is built from the vault's own files (invariant 8).
   handle('search:query', async ({ vaultId, q, limit }) => (await registry.get(vaultId)).index.query(q, limit));
-
-  // Native confirmation box. E2E runs set LODE_E2E_AUTO_CONFIRM because a native box can't be clicked.
-  handle('ui:confirm', async ({ message, detail, confirmLabel, danger }) => {
-    if (process.env.LODE_E2E_AUTO_CONFIRM === '1') return true;
-    const win = BrowserWindow.getFocusedWindow();
-    const opts: Electron.MessageBoxOptions = {
-      type: danger ? 'warning' : 'question',
-      message,
-      ...(detail ? { detail } : {}),
-      buttons: [confirmLabel, 'Cancel'],
-      defaultId: danger ? 1 : 0,
-      cancelId: 1,
-      noLink: true,
-    };
-    const res = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
-    return res.response === 0;
-  });
 
   handle('link:open', async ({ url }) => {
     const u = new URL(url);

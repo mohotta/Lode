@@ -32,7 +32,7 @@ async function saveKeys(page: Page): Promise<void> {
   await page.getByLabel('Tavily search key API key').fill('tvly-e2e-fake');
   await page.getByRole('group', { name: 'Tavily search key' }).getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('group', { name: 'Tavily search key' }).getByText('Saved to secure storage')).toBeVisible();
-  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Close settings' }).click();
 }
 
 test('duplicates, point edit/delete, background generate, breadcrumb history, regenerate + undo, trash', async () => {
@@ -76,23 +76,36 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   await expect(backlog.getByText('kube-proxy in IPVS mode scales better with many Services')).toBeVisible();
   expect(await readFile(dayFile, 'utf8')).toContain(`kube-proxy in IPVS mode scales better with many Services ^${idBefore}`);
 
-  // --- Soft delete and restore.
+  // --- Disable (soft delete) and restore; a disabled point can also be deleted permanently.
   const near = rows.filter({ hasText: 'cluster network' });
   await near.getByRole('button', { name: 'Point actions' }).click();
-  await page.getByRole('menuitem', { name: 'Delete' }).click();
-  await expect(near.getByText('deleted')).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /Delete permanently/ })).toHaveCount(0);
+  await page.getByRole('menuitem', { name: 'Disable' }).click();
+  await expect(near.getByText('disabled')).toBeVisible();
   expect(await readFile(dayFile, 'utf8')).toMatch(/deleted:\s*\n?\s*-?\s*\[?p-/);
   await near.getByRole('button', { name: 'Point actions' }).click();
   await page.getByRole('menuitem', { name: 'Restore' }).click();
-  await expect(near.getByText('deleted')).toHaveCount(0);
+  await expect(near.getByText('disabled')).toHaveCount(0);
+
+  await input.fill('A throwaway note to delete');
+  await page.keyboard.press('Enter');
+  const temp = rows.filter({ hasText: 'A throwaway note to delete' });
+  await temp.getByRole('button', { name: 'Point actions' }).click();
+  await page.getByRole('menuitem', { name: 'Disable' }).click();
+  await temp.getByRole('button', { name: 'Point actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete permanently…' }).click();
+  await page.getByRole('alertdialog', { name: 'Delete this point permanently?' }).getByRole('button', { name: 'Delete permanently' }).click();
+  await expect(temp).toHaveCount(0);
+  await expect(rows).toHaveCount(3);
+  expect(await readFile(dayFile, 'utf8')).not.toContain('A throwaway note to delete');
 
   // --- Generate runs in the background; the composer stays usable meanwhile.
   const before = await hashBacklogs(vaultRoot);
   await page.getByRole('button', { name: 'Generate', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Send 3 point(s)' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Generate', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   await expect(input).toBeEnabled();
-  const bar = page.getByRole('contentinfo', { name: 'Background jobs' });
+  const bar = page.getByRole('region', { name: 'Background jobs' });
   await expect(bar.getByText(/Filed 3/)).toBeVisible();
   await bar.getByRole('button', { name: 'Dismiss Generate · Kubernetes' }).click();
   await expect(bar).toHaveCount(0);
@@ -116,7 +129,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   const original = await readFile(notePath, 'utf8');
   await page.getByRole('button', { name: 'Note actions' }).click();
   await page.getByRole('menuitem', { name: 'Rewrite from points…' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Regenerate from 3 point(s)' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Regenerate', exact: true }).click();
   await expect(bar.getByText('Rewritten')).toBeVisible();
   const note = page.getByRole('region', { name: 'Service networking & kube-proxy' });
   await expect(note.getByText('Rewritten: Services load-balance across ready pods.')).toBeVisible();
@@ -135,6 +148,7 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   // --- Move the note to trash: its points become unfiled; restore it from Trash.
   await page.getByRole('button', { name: 'Note actions' }).click();
   await page.getByRole('menuitem', { name: 'Move to trash' }).click();
+  await page.getByRole('alertdialog', { name: /to the trash\?$/ }).getByRole('button', { name: 'Move to trash' }).click();
   await expect(noteHeading).toHaveCount(0);
   await expect(backlog.getByText('unfiled')).toHaveCount(3);
   await page.getByRole('button', { name: /^Trash, 1 item/ }).click();
@@ -143,16 +157,17 @@ test('duplicates, point edit/delete, background generate, breadcrumb history, re
   await page.screenshot({ path: 'test-results/trash-dark.png' });
   await trash.getByRole('button', { name: 'Restore Service networking & kube-proxy' }).click();
   await expect(page.getByText('Trash is empty')).toBeVisible();
-  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Close trash' }).click();
   await expect(backlog.getByText('unfiled')).toHaveCount(0);
 
   // --- Delete the folder, then restore it.
   await page.getByRole('button', { name: 'Actions for Kubernetes' }).click();
   await page.getByRole('menuitem', { name: 'Move to trash' }).click();
+  await page.getByRole('alertdialog', { name: 'Move "Kubernetes" to the trash?' }).getByRole('button', { name: 'Move to trash' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Kubernetes' })).toHaveCount(0);
   await page.getByRole('button', { name: /^Trash, 1 item/ }).click();
   await trash.getByRole('button', { name: 'Restore Kubernetes' }).click();
-  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Close trash' }).click();
   await page.getByRole('button', { name: 'Kubernetes', exact: true }).click();
   await expect(rows).toHaveCount(3);
   expect(await hashBacklogs(vaultRoot)).toEqual(before);

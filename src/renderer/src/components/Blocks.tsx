@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import type { ResolvedBlock } from '@shared/types';
-import { lode } from '../api';
 import { dayMonth, shortDate } from '../dates';
-import { CopyIcon, DotsIcon, PencilIcon, TrashIcon, WarnIcon } from './Icons';
+import { BanIcon, DotsIcon, PencilIcon, WarnIcon } from './Icons';
 import { Markdown } from './Markdown';
 import { Menu } from './Menu';
 import { PointEditor } from './PointEditor';
 
 type PointB = Extract<ResolvedBlock, { kind: 'point' }>;
-type LlmB = Extract<ResolvedBlock, { kind: 'llm' }>;
+export type LlmB = Extract<ResolvedBlock, { kind: 'llm' }>;
 
 interface PointActions {
   onJump(id: string): void;
@@ -17,86 +16,84 @@ interface PointActions {
 }
 
 /**
- * The user's own point, rendered from backlog text. Primary content: full-contrast type, a solid
- * accent rule and a margin date; AI text is muted with a dotted rule and a "generated" label,
- * so the two never differ by colour alone (FR-23).
+ * The user's own point, rendered from backlog text: a card with a filled date pill beside it.
+ * AI text is plain muted prose beside an outlined "Context" pill, so the two differ by shape
+ * (card or none), type weight and the margin label, never by colour alone (FR-23). Corrections
+ * about the point sit inside its card below a divider; the point text itself is untouched.
  */
-export function PointBlock({ block, ...a }: { block: PointB } & PointActions): React.JSX.Element {
+export function PointBlock({ block, fixes = [], ...a }: { block: PointB; fixes?: LlmB[] } & PointActions): React.JSX.Element {
   const [editing, setEditing] = useState(false);
   if (block.missing || block.deleted) {
     return (
       <div className="point-block removed" role="note" aria-label="Removed point">
-        <WarnIcon size={13} />
-        <span>{block.missing ? 'This point is no longer in the backlog' : 'You removed this point'}</span>
-        {block.deleted && (
-          <button className="link-btn" onClick={() => void a.onSetDeleted(block.id, false)}>
-            Restore
-          </button>
-        )}
+        <span />
+        <p className="removed-line">
+          <WarnIcon size={13} />
+          <span>{block.missing ? 'This point is no longer in the backlog' : 'You disabled this point'}</span>
+          {block.deleted && (
+            <button className="link-btn" onClick={() => void a.onSetDeleted(block.id, false)}>
+              Restore
+            </button>
+          )}
+        </p>
       </div>
     );
   }
+  const date = (
+    <div className="margin-mark">
+      <button className="point-date" onClick={() => a.onJump(block.id)} title={`Your point · ${shortDate(block.date)} · show in backlog`}>
+        {dayMonth(block.date)}
+      </button>
+    </div>
+  );
   if (block.duplicateOf) {
     const of = block.duplicateOf;
     return (
       <article id={`np-${block.id}`} className="point-block repeat" aria-label={`Your point from ${shortDate(block.date)}, a repeat`}>
-        <div className="margin-mark">
-          <button className="point-date" onClick={() => a.onJump(block.id)} title="Show in backlog">
-            {dayMonth(block.date)}
-          </button>
-          <span className="mark-note">
-            <CopyIcon size={11} /> Repeat of {of.date ? dayMonth(of.date) : 'an earlier point'}
-          </span>
-        </div>
-        <div className="point-body user-md">
-          <Markdown text={block.text} keepBreaks />
+        {date}
+        <div className="point-card">
+          <div className="point-body user-md">
+            <Markdown text={block.text} keepBreaks />
+          </div>
+          <p className="point-foot">Repeat of your point from {of.date ? dayMonth(of.date) : 'earlier'}</p>
         </div>
       </article>
     );
   }
   return (
-    <article
-      id={`np-${block.id}`}
-      className={`point-block ${block.corrected ? 'has-fix' : ''}`}
-      aria-label={`Your point from ${shortDate(block.date)}`}
-    >
-      <div className="margin-mark">
-        <button className="point-date" onClick={() => a.onJump(block.id)} title={`Your point · ${shortDate(block.date)} · show in backlog`}>
-          {dayMonth(block.date)}
-        </button>
-        {block.corrected && (
-          <span className="mark-note fix" title="An AI correction note follows this point">
-            <WarnIcon size={11} /> Needs a fix
+    <article id={`np-${block.id}`} className="point-block" aria-label={`Your point from ${shortDate(block.date)}`}>
+      {date}
+      <div className="point-card">
+        {!editing && (
+          <span className="point-block-actions">
+            <Menu
+              label="Point actions"
+              trigger={<DotsIcon size={14} />}
+              align="end"
+              items={[
+                { label: 'Edit', icon: <PencilIcon size={14} />, onSelect: () => setEditing(true) },
+                'separator',
+                {
+                  label: 'Disable',
+                  icon: <BanIcon size={14} />,
+                  onSelect: () => void a.onSetDeleted(block.id, true),
+                },
+              ]}
+            />
           </span>
         )}
+        {editing ? (
+          <PointEditor initial={block.text} onSave={(t) => a.onEdit(block.id, t)} onCancel={() => setEditing(false)} />
+        ) : (
+          /* Exactly the backlog text; markdown is only how it is displayed. */
+          <div className="point-body user-md">
+            <Markdown text={block.text} keepBreaks />
+          </div>
+        )}
+        {fixes.map((f) => (
+          <Correction key={f.id} block={f} />
+        ))}
       </div>
-      {!editing && (
-        <span className="point-block-actions">
-          <Menu
-            label="Point actions"
-            trigger={<DotsIcon size={14} />}
-            align="end"
-            items={[
-              { label: 'Edit', icon: <PencilIcon size={14} />, onSelect: () => setEditing(true) },
-              'separator',
-              {
-                label: 'Delete',
-                icon: <TrashIcon size={14} />,
-                danger: true,
-                onSelect: () => void a.onSetDeleted(block.id, true),
-              },
-            ]}
-          />
-        </span>
-      )}
-      {editing ? (
-        <PointEditor initial={block.text} onSave={(t) => a.onEdit(block.id, t)} onCancel={() => setEditing(false)} />
-      ) : (
-        /* Exactly the backlog text; markdown is only how it is displayed. */
-        <div className="point-body user-md">
-          <Markdown text={block.text} keepBreaks />
-        </div>
-      )}
     </article>
   );
 }
@@ -114,59 +111,68 @@ function aiTitle(block: LlmB): string {
   return block.at ? `Generated by ${model} · ${dayMonth(block.at)}` : `Generated by ${model}`;
 }
 
-/** AI note that the point above contains a mistake. Warning icon + label + dashed rule, not colour alone. */
-function CorrectionBlock({ block }: { block: LlmB }): React.JSX.Element {
+/** A correction body is "<issue>\n\n**Correct:** <fix> <links>" (core/generation/blocks.ts). */
+function splitCorrection(body: string): { issue: string; fix: string } {
+  const m = /^([\s\S]*?)\n\n\*\*Correct:\*\*\s*([\s\S]*)$/.exec(body);
+  return m ? { issue: (m[1] ?? '').trim(), fix: m[2] ?? '' } : { issue: '', fix: body };
+}
+
+/** AI note that a point contains a mistake: an arrow and a "Correction" label, inside the point's card. */
+function Correction({ block }: { block: LlmB }): React.JSX.Element {
+  const { issue, fix } = splitCorrection(block.body);
   return (
-    <aside className="correction-block" aria-label="AI correction for your point above">
-      <div className="margin-mark" title={aiTitle(block)}>
-        <span className="mark-note fix">
-          <WarnIcon size={11} /> Correction
+    <aside className="correction" aria-label="AI correction for your point above">
+      <svg className="fix-arrow" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+        <path d="M15 10l5 5-5 5" />
+      </svg>
+      <div className="fix-body">
+        <span className="fix-label" title={issue ? `${issue}\n\n${aiTitle(block)}` : aiTitle(block)}>
+          Correction
         </span>
+        {' — '}
+        <Markdown text={fix} cite />
       </div>
-      <div className="prose">
-        <Markdown text={block.body} />
-      </div>
-      <Sources block={block} />
     </aside>
   );
 }
 
-function Sources({ block }: { block: LlmB }): React.JSX.Element | null {
-  if (block.sources.length === 0) return null;
-  return (
-    <p className="sources" aria-label="Sources">
-      <span className="sources-label">Sources</span>
-      {block.sources.map((s) => (
-        <button key={s.url} className="source" title={s.url} onClick={() => void lode.link.open(s.url)}>
-          {host(s.url)}
-        </button>
-      ))}
-    </p>
-  );
-}
-
-/** Generated content: secondary, muted prose with a dotted rule and a "generated" margin label. */
-export function LlmBlock({ block }: { block: LlmB }): React.JSX.Element | null {
-  if (block.correctionFor) return <CorrectionBlock block={block} />;
+/** Generated content: muted prose beside a "Context" pill, with numbered citations. */
+export function LlmBlock({ block, label = 'Context' }: { block: LlmB; label?: string }): React.JSX.Element | null {
+  // A correction whose point is not on the page (removed or missing) gets a card of its own.
+  if (block.correctionFor) {
+    return (
+      <div className="point-block loose-fix">
+        <span />
+        <div className="point-card">
+          <Correction block={block} />
+        </div>
+      </div>
+    );
+  }
   // A repeat marker carries no prose; the point above already shows "Repeat of …".
   if (block.duplicate) return null;
+  // The list of extra facts reads fine without its lead-in line.
+  const body = block.body.replace(/^Also worth knowing:\n(?=- )/m, '');
   return (
     <article className="llm-block" aria-label="AI-generated explanation">
       <div className="margin-mark" title={aiTitle(block)}>
-        <span className="mark-ai">generated</span>
+        <span className="mark-ai">{label}</span>
       </div>
       <div className="llm-body prose">
-        <Markdown text={block.body} />
+        <Markdown text={body} cite />
       </div>
-      <Sources block={block} />
     </article>
   );
 }
 
 export function RawBlock({ text }: { text: string }): React.JSX.Element {
   return (
-    <div className="raw-block prose" aria-label="Text added outside Lode">
-      <Markdown text={text} />
+    <div className="raw-block" aria-label="Text added outside Lode">
+      <span />
+      <div className="prose">
+        <Markdown text={text} />
+      </div>
     </div>
   );
 }
