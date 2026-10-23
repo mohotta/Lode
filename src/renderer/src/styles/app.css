@@ -3,42 +3,52 @@
   --font: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
 
-  --bg-side: #f5f5f3;
-  --bg-list: #fafaf9;
-  --bg-doc: #ffffff;
-  --bg-raised: #ffffff;
-  --bg-input: #ffffff;
-  --line: #e4e4e0;
-  --line-strong: #cfcfca;
-  --text: #1c1d20;
-  --text-2: #4b4e55;
-  --text-3: #6e7179;
-  --hover: rgb(0 0 0 / 0.035);
-  --selected: rgb(0 0 0 / 0.06);
+  /* Light: a warm stone palette. Tinted panes at the back, near-white cards in front. */
+  --bg-side: #efede9;
+  --bg-list: #f3f2ee;
+  --bg-doc: #f7f6f3;
+  --bg-raised: #fdfcfa;
+  --bg-input: #fdfcfa;
+  --line: #e2dfd8;
+  --line-strong: #d3cfc6;
+  --text: #1f1d1a;
+  --text-2: #57534e;
+  --text-3: #6b665f;
+  --hover: rgb(60 45 30 / 0.05);
+  --selected: rgb(60 45 30 / 0.09);
 
   /* --accent-l / --accent-d come from the chosen accent (theme.ts); amber by default. */
-  --accent: var(--accent-l, #b4761c);
+  --accent: var(--accent-l, #a8500a);
   --accent-ink: color-mix(in srgb, var(--accent) 70%, var(--text));
   --accent-tint: color-mix(in srgb, var(--accent) 9%, transparent);
   --accent-line: color-mix(in srgb, var(--accent) 60%, transparent);
-  --accent-btn: #1c1d20;
+  --accent-btn: #1f1d1a;
   --accent-btn-ink: #ffffff;
-  --accent-btn-icon: var(--accent-d, #e8b65a);
+  --accent-btn-icon: var(--accent-d, #e8a94e);
+  /* Accent as a fill (buttons, badges, dots): the bright shade with dark ink, in both themes.
+     --accent (the deep shade) is for accent-coloured text. */
+  --accent-fill: var(--accent-d, #e8a94e);
+  --on-accent: #1c1917;
+  --card-shadow: 0 1px 2px rgb(40 30 20 / 0.05);
+  --seg-track: #ebe8e3;
+  --seg-on: #fdfcfa;
+  --seg-shadow: 0 1px 2px rgb(40 30 20 / 0.08);
 
-  --ai-line: #c4c7ce;
-  --card: #fafaf8;
-  --card-line: #e6e6e1;
-  --pill: #f0f0ec;
-  --pill-line: #dadad4;
-  --fix: #b4502c;
-  --code-bg: #f3f3f0;
-  --syn-kw: #a1336b;
-  --syn-str: #2f7a3d;
-  --syn-num: #a35a00;
-  --syn-com: #8c8f96;
-  --syn-fn: #2b5fb4;
-  --syn-type: #7a4bc2;
-  --syn-attr: #a35a00;
+  --ai-line: #c9c4ba;
+  --card: #fdfcfa;
+  --card-line: #e6e3dc;
+  --pill: #fdfcfa;
+  --pill-line: #d3cfc6;
+  --ctx-line: #ddd9d1;
+  --fix: #b93d0a;
+  --code-bg: #f2f0eb;
+  --syn-kw: #7a3bd6;
+  --syn-str: #2f7a3a;
+  --syn-num: #a8500a;
+  --syn-com: #6b665f;
+  --syn-fn: #1d5fd0;
+  --syn-type: #7a3bd6;
+  --syn-attr: #a8500a;
   --danger: #c43c33;
   --danger-tint: #fdeeed;
   --ok: #2f8a4c;
@@ -63,18 +73,25 @@
     --text-3: #8b8b95;
     --hover: rgb(255 255 255 / 0.04);
     --selected: rgb(255 255 255 / 0.075);
-    --accent: var(--accent-d, #e8b65a);
+    --accent: var(--accent-d, #e8a94e);
     --accent-ink: color-mix(in srgb, var(--accent) 70%, var(--text));
     --accent-tint: color-mix(in srgb, var(--accent) 9%, transparent);
     --accent-line: color-mix(in srgb, var(--accent) 60%, transparent);
     --accent-btn: #ececee;
     --accent-btn-ink: #17181b;
-    --accent-btn-icon: var(--accent-l, #b4761c);
+    --accent-btn-icon: var(--accent-l, #b45309);
+    --accent-fill: var(--accent-d, #e8a94e);
+    --on-accent: #141414;
+    --card-shadow: none;
+    --seg-on: var(--selected);
+    --seg-track: #16161a;
+    --seg-shadow: none;
     --ai-line: #4a4c54;
     --card: #18181c;
     --card-line: #26262c;
     --pill: #1f1f25;
     --pill-line: #2e2e36;
+    --ctx-line: #2c2c34;
     --fix: #f08c6c;
     --code-bg: #0f0f11;
     --syn-kw: #c4a7e7;
@@ -106,18 +123,25 @@
   --text-3: #8b8b95;
   --hover: rgb(255 255 255 / 0.04);
   --selected: rgb(255 255 255 / 0.075);
-  --accent: var(--accent-d, #e8b65a);
+  --accent: var(--accent-d, #e8a94e);
   --accent-ink: color-mix(in srgb, var(--accent) 70%, var(--text));
   --accent-tint: color-mix(in srgb, var(--accent) 9%, transparent);
   --accent-line: color-mix(in srgb, var(--accent) 60%, transparent);
   --accent-btn: #ececee;
   --accent-btn-ink: #17181b;
-  --accent-btn-icon: var(--accent-l, #b4761c);
+  --accent-btn-icon: var(--accent-l, #b45309);
+  --accent-fill: var(--accent-d, #e8a94e);
+  --on-accent: #141414;
+  --card-shadow: none;
+  --seg-on: var(--selected);
+  --seg-track: #16161a;
+  --seg-shadow: none;
   --ai-line: #4a4c54;
   --card: #18181c;
   --card-line: #26262c;
   --pill: #1f1f25;
   --pill-line: #2e2e36;
+  --ctx-line: #2c2c34;
   --fix: #f08c6c;
   --code-bg: #0f0f11;
   --syn-kw: #c4a7e7;
@@ -254,10 +278,10 @@ button {
   color: var(--accent-btn-ink);
   border-color: transparent;
 }
-/* The main action: filled with the accent, dark ink (reads on every accent swatch). */
+/* The main action: filled with the accent (--accent-fill / --on-accent per theme). */
 .btn.primary {
-  background: var(--accent);
-  color: #111114;
+  background: var(--accent-fill);
+  color: var(--on-accent);
   border-color: transparent;
   font-weight: 600;
 }
@@ -621,8 +645,8 @@ button {
 }
 /* Focus: an accent edge and a soft accent ring. */
 .composer:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 9%, transparent);
+  border-color: color-mix(in srgb, var(--accent-fill) 55%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-fill) 12%, transparent);
 }
 .composer .rt-tools {
   flex-wrap: wrap;
@@ -1008,7 +1032,7 @@ kbd {
   display: inline-block;
   margin-top: 1px;
   padding: 1px 8px;
-  border: 1px solid var(--pill-line);
+  border: 1px solid var(--ctx-line);
   border-radius: 999px;
   font-size: 12px;
   line-height: 1.6;
@@ -1261,7 +1285,7 @@ kbd {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent-fill);
 }
 .source-list li {
   display: flex;
@@ -1687,24 +1711,25 @@ kbd {
   padding: 24px 32px 60px;
 }
 .prefs .center-header {
-  margin-bottom: 8px;
+  margin-bottom: 16px;
 }
 .prefs h1 {
   font-size: 23px;
 }
+/* Each section is a card: title in the left column, controls on the right. */
 .prefs .field-group {
   position: relative;
-  margin: 0;
-  padding: 18px 0 18px 224px;
-  border: 0;
-  border-top: 1px solid var(--line);
-  border-radius: 0;
+  margin: 0 0 12px;
+  padding: 18px 20px 18px 244px;
+  border: 1px solid var(--card-line);
+  border-radius: 14px;
+  background: var(--card);
 }
 /* Absolutely positioned, so the legend sits in the left gutter instead of on the border. */
 .prefs .field-group > legend {
   position: absolute;
   top: 18px;
-  left: 0;
+  left: 20px;
   width: 200px;
   margin: 0;
   padding: 0;
@@ -1737,7 +1762,7 @@ kbd {
 }
 @media (max-width: 1000px) {
   .prefs .field-group {
-    padding-left: 0;
+    padding-left: 20px;
   }
   .prefs .field-group > legend {
     position: static;
@@ -2210,7 +2235,7 @@ kbd {
   gap: 2px;
   padding: 2px;
   border-radius: 8px;
-  background: var(--hover);
+  background: var(--seg-track);
 }
 .seg button {
   height: 26px;
@@ -2225,8 +2250,9 @@ kbd {
   color: var(--text);
 }
 .seg button.on {
-  background: var(--selected);
+  background: var(--seg-on);
   color: var(--text);
+  box-shadow: var(--seg-shadow);
 }
 .btn.toggle.on {
   background: var(--selected);
@@ -2255,22 +2281,22 @@ kbd {
 /* Points due for review: the row is tinted and the count becomes a filled badge, so it catches the eye. */
 .review-item.has-due {
   height: 34px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-fill) 55%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  background: color-mix(in srgb, var(--accent-fill) 16%, transparent);
   color: var(--text);
   font-weight: 500;
 }
 .review-item.has-due:hover {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  background: color-mix(in srgb, var(--accent-fill) 24%, transparent);
 }
 /* Open: a filled row, stronger still when reviews are due. */
 .review-item.selected {
   background: var(--selected);
 }
 .review-item.has-due.selected {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  border-color: var(--accent-fill);
+  background: color-mix(in srgb, var(--accent-fill) 32%, transparent);
 }
 .review-item.has-due .tree-icon {
   color: var(--accent);
@@ -2282,8 +2308,8 @@ kbd {
   height: 20px;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--accent);
-  color: #111114;
+  background: var(--accent-fill);
+  color: var(--on-accent);
   font-weight: 600;
 }
 /* Search as a box at the top of the sidebar, with its shortcut. */
@@ -2297,7 +2323,7 @@ kbd {
   padding: 0 8px 0 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--bg-list);
+  background: var(--bg-input);
   color: var(--text-3);
   font-size: 14px;
   text-align: left;
@@ -2686,4 +2712,25 @@ body.resizing {
 }
 :root[data-theme='dark'] .swatch {
   --sw: var(--sw-d);
+}
+
+/* Light mode separates white cards from tinted panes with a faint shadow (none in dark mode). */
+.point-card,
+.composer,
+.point-row,
+.card,
+.point-block.review-card,
+.search-hit.mine,
+.field-group {
+  box-shadow: var(--card-shadow);
+}
+.composer:focus-within {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-fill) 12%, transparent);
+}
+
+/* Disabled main action: neutral, not a faded accent. */
+.btn.primary:disabled {
+  opacity: 1;
+  background: var(--selected);
+  color: var(--text-3);
 }
