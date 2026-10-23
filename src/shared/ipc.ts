@@ -24,6 +24,8 @@ export const Schemas = {
   'vault:list': z.object({}),
   'vault:open': z.object({}),
   'vault:forget': z.object({ vaultId }),
+  /** Creates a missing vault's folder again (empty) at its recorded path. User-initiated only. */
+  'vault:recreate': z.object({ vaultId }),
   'folder:list': z.object({ vaultId }),
   'folder:create': z.object({ vaultId, title: z.string().min(1).max(200) }),
   'folder:rename': z.object({ vaultId, folder: slug, title: z.string().min(1).max(200) }),

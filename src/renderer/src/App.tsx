@@ -13,6 +13,7 @@ import type {
 import { ask, lode, unwrap } from './api';
 import { BacklogView } from './components/BacklogView';
 import { ConfirmHost } from './components/ConfirmHost';
+import { MissingVault } from './components/MissingVault';
 import { DigestPicker } from './components/DigestPicker';
 import { GenerateDialog, type DialogTarget } from './components/GenerateDialog';
 import { SettingsView } from './components/SettingsView';
@@ -66,6 +67,10 @@ const message = (e: unknown): string => (e instanceof Error ? e.message : String
 
 export function App(): React.JSX.Element {
   const [vaults, setVaults] = useState<VaultInfo[]>([]);
+  const vaultsRef = useRef(vaults);
+  useEffect(() => {
+    vaultsRef.current = vaults;
+  }, [vaults]);
   const [vaultId, setVaultId] = useState<string | null>(null);
   const [folders, setFolders] = useState<FolderInfo[]>([]);
   const [history, setHistory] = useState<History>(EMPTY_HISTORY);
@@ -111,7 +116,21 @@ export function App(): React.JSX.Element {
       return await fn();
     } catch (e) {
       setError(message(e));
+      // The vault folder may have gone away underneath us; refresh so the panel can say so.
+      void lode.vault.list().then((r) => r.ok && setVaults(r.value.vaults));
       return undefined;
+    }
+  }, []);
+
+  // Re-checks which vault folders exist (read-only). Run on focus and after a failed action,
+  // so a vault or folder deleted outside Lode shows the missing-vault panel instead of errors.
+  const refreshVaults = useCallback(async (): Promise<VaultInfo[] | null> => {
+    try {
+      const { vaults: vs } = await unwrap(lode.vault.list());
+      setVaults(vs);
+      return vs;
+    } catch {
+      return null;
     }
   }, []);
 
@@ -150,6 +169,26 @@ export function App(): React.JSX.Element {
     if (vaultId && folder) await guard(() => load(vaultId, folder));
   }, [vaultId, folder, guard, load]);
 
+  // Coming back to the window: pick up vaults, folders and notes changed or deleted outside Lode.
+  useEffect(() => {
+    const onFocus = (): void => {
+      void (async () => {
+        const vs = await refreshVaults();
+        const v = vs?.find((x) => x.id === vaultId);
+        if (!vaultId || !v || v.missing) return;
+        try {
+          const fs = await unwrap(lode.folder.list(vaultId));
+          setFolders(fs);
+          if (folder && fs.some((f) => f.slug === folder)) await refreshFolder();
+        } catch {
+          // Reported by the next action that needs it.
+        }
+      })();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [vaultId, folder, refreshVaults, refreshFolder]);
+
   // Scroll to a point requested from another page once its folder's backlog is on screen.
   useEffect(() => {
     const id = pendingJump.current;
@@ -175,7 +214,15 @@ export function App(): React.JSX.Element {
   }, []);
 
   const selectVault = useCallback(
-    async (id: string) => {
+    async (id: string, known?: VaultInfo[]) => {
+      if ((known ?? vaultsRef.current).find((v) => v.id === id)?.missing) {
+        setVaultId(id);
+        setFolders([]);
+        setHistory(EMPTY_HISTORY);
+        setTrash([]);
+        setReview([]);
+        return;
+      }
       await guard(async () => {
         const fs = await unwrap(lode.folder.list(id));
         setVaultId(id);
@@ -194,7 +241,7 @@ export function App(): React.JSX.Element {
         if (cancelled) return;
         setVaults(vs);
         const last = vs.find((v) => v.id === lastVaultId) ?? vs.at(-1);
-        if (last) void selectVault(last.id);
+        if (last) void selectVault(last.id, vs);
       },
       (e: unknown) => !cancelled && setError(message(e)),
     );
@@ -374,6 +421,8 @@ export function App(): React.JSX.Element {
   };
 
   const folderInfo = folders.find((f) => f.slug === folder);
+  const activeVault = vaults.find((v) => v.id === vaultId);
+  const activeMissing = !!activeVault?.missing;
   /** Point ID → the notes it is filed in, for the reader's "Also in" links. */
   const filedIn = useMemo(
     () => new Map(days.flatMap((d) => d.points).map((pt) => [pt.id, pt.filedUnder] as const)),
@@ -450,7 +499,7 @@ export function App(): React.JSX.Element {
 
   return (
     <div
-      className={`app ${page !== 'main' ? 'with-settings' : ''}`}
+      className={`app ${page !== 'main' || activeMissing ? 'with-settings' : ''}`}
       style={
         {
           '--side-w': `${widths.sidebar}px`,
@@ -462,15 +511,15 @@ export function App(): React.JSX.Element {
       <Sidebar
         vaults={vaults}
         activeVaultId={vaultId}
-        folders={folders}
+        folders={activeMissing ? [] : folders}
         activeFolder={folder}
         subtopics={subtopics}
         activeSubtopic={subtopic}
         settingsOpen={page === 'settings'}
         trashOpen={page === 'trash'}
-        trashCount={trash.length}
+        trashCount={activeMissing ? 0 : trash.length}
         reviewOpen={page === 'review'}
-        reviewCount={review.length}
+        reviewCount={activeMissing ? 0 : review.length}
         searchOpen={searchOpen}
         resizer={
           <Resizer
@@ -545,7 +594,37 @@ export function App(): React.JSX.Element {
         </div>
       )}
 
-      {page === 'settings' ? (
+      {activeMissing && activeVault && page === 'main' ? (
+        <main className="settings-page" aria-label="Missing vault">
+          <MissingVault
+            vault={activeVault}
+            onOpenOther={() => void openVault()}
+            onRecreate={() =>
+              void guard(async () => {
+                await unwrap(lode.vault.recreate(activeVault.id));
+                const vs = await refreshVaults();
+                await selectVault(activeVault.id, vs ?? undefined);
+              })
+            }
+            onForget={() =>
+              void ask({
+                message: `Remove “${activeVault.name}” from the list?`,
+                detail: 'No files are deleted. You can open the folder again later.',
+                confirmLabel: 'Remove from list',
+              }).then(async (ok) => {
+                if (!ok) return;
+                await guard(async () => {
+                  await unwrap(lode.vault.forget(activeVault.id));
+                  const vs = (await refreshVaults()) ?? [];
+                  const next = vs.find((v) => !v.missing) ?? vs[0];
+                  if (next) await selectVault(next.id, vs);
+                  else setVaultId(null);
+                });
+              })
+            }
+          />
+        </main>
+      ) : page === 'settings' ? (
         <main className="settings-page" aria-label="Settings">
           <SettingsView
             onClose={closePage}
@@ -663,7 +742,7 @@ export function App(): React.JSX.Element {
 
           <NotePane
             vaultId={vaultId}
-            folder={folder}
+            folder={folderInfo ? folder : null}
             folderTitle={folderInfo?.title ?? null}
             subtopics={subtopics}
             active={subtopic}
@@ -683,6 +762,8 @@ export function App(): React.JSX.Element {
             onEditPoint={editPoint}
             onSetPointDeleted={setPointDeleted}
             digests={digests}
+            days={days}
+            onAddPoint={() => scratchRef.current?.focus()}
             filedIn={filedIn}
             onNewDigest={() => setPickingDigest(true)}
             onRegenerateDigest={openDigestDialog}

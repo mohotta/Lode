@@ -3444,3 +3444,453 @@ select.set-input {
   border-color: transparent;
   opacity: 0.9;
 }
+
+/* ---------- Sidebar refinements ---------- */
+/* The app icon (build/icon.svg, the same artwork as the window and dock icon). */
+.vault-tile {
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+.side-search kbd {
+  padding: 0 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  font-size: 10.5px;
+}
+/* Subtopics hang off a thin guide line under their folder. */
+.tree.nested {
+  margin: 1px 0 4px 15px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+.tree.nested .tree-item {
+  padding-left: 10px;
+}
+
+/* ---------- Right rail (on this page) ---------- */
+.outline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.rail-sec + .rail-sec {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.rail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 8px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+.rail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: left;
+}
+.rail-item:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.rail-item.current {
+  background: var(--selected);
+  color: var(--text);
+}
+.rail-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.rail-item.current .rail-dot {
+  background: var(--accent-fill);
+}
+.point-link.current::before {
+  content: none;
+}
+.point-link {
+  padding-left: 8px;
+}
+.rail-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.rail-title.one,
+.one {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.clamp2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rail-meta {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.rail-tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--selected);
+  color: var(--text-3);
+  font: 11px var(--mono);
+}
+.source-list .rail-title {
+  color: var(--text);
+}
+
+/* ---------- Folder overview ---------- */
+.overview {
+  max-width: 1080px;
+  padding-top: 16px;
+}
+.folder-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 40px;
+}
+.folder-title {
+  margin: 0 0 6px;
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.folder-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 13.5px;
+  color: var(--text-3);
+}
+.folder-stats b {
+  font-weight: 500;
+  color: var(--text);
+}
+.folder-sec {
+  margin-bottom: 44px;
+}
+.folder-sec .overview-head {
+  margin: 0 0 14px;
+}
+.folder-sec .overview-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.view-switch.seg button {
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.btn.ghost {
+  border-color: transparent;
+  background: none;
+  color: var(--text-2);
+}
+.btn.ghost:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--hover);
+  color: var(--text);
+}
+.topic-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.topic-card {
+  width: 100%;
+  height: 100%;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--card-line);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  color: var(--text);
+  text-align: left;
+}
+.topic-card:hover {
+  border-color: var(--line-strong);
+}
+.topic-card .topic-name {
+  font-size: 16px;
+  line-height: 1.35;
+}
+.topic-excerpt {
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.topic-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.topic-dots {
+  display: flex;
+  gap: 3px;
+}
+.topic-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-fill);
+}
+.push {
+  margin-left: auto;
+}
+.topic-row-v2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  width: 100%;
+  padding: 14px 18px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+.topic-row-v2:hover {
+  background: var(--hover);
+}
+.row-card > li:first-child .topic-row-v2 {
+  border-radius: 14px 14px 0 0;
+}
+.row-card > li:last-child .topic-row-v2 {
+  border-radius: 0 0 14px 14px;
+}
+.topic-row-v2 .row-main {
+  display: flex;
+  flex-direction: column;
+}
+.topic-count {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.topic-date {
+  width: 56px;
+  text-align: right;
+  color: var(--text-3);
+}
+.folder-cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 44px;
+}
+.folder-cols > .folder-sec {
+  flex: 1 1 360px;
+  min-width: 0;
+}
+.digest-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.digest-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--card-line);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+  color: var(--text);
+  text-align: left;
+}
+.digest-row:hover {
+  border-color: var(--line-strong);
+}
+.digest-row .row-main {
+  display: flex;
+  flex-direction: column;
+}
+.cal-tile {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  width: 44px;
+  height: 48px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  text-align: center;
+}
+.cal-tile-top {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 16px;
+}
+.cal-tile-num {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  background: var(--selected);
+  font: 500 13px var(--mono);
+}
+.latest-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.latest-list li {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.latest-list li:last-child {
+  border-bottom: 0;
+}
+.latest-list time {
+  padding-top: 2px;
+  color: var(--text-3);
+}
+.latest-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+.latest-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.latest-fix {
+  margin-left: 6px;
+  font-size: 12.5px;
+  color: var(--fix);
+}
+
+/* Top row: the vault switcher (app icon + vault name) and the search button. */
+.sidebar-top {
+  gap: 4px;
+  padding: 0 8px;
+}
+.sidebar-top .vault-switch {
+  gap: 8px;
+  padding: 4px 6px;
+}
+.side-search-btn {
+  width: 30px;
+  height: 30px;
+}
+.sidebar-scroll > .nav-items:first-child {
+  margin-top: 6px;
+}
+
+/* ---------- Missing vault ---------- */
+.missing-vault {
+  max-width: 560px;
+  margin: 14vh auto 0;
+  padding: 0 24px;
+  text-align: center;
+}
+.missing-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--fix) 14%, transparent);
+  color: var(--fix);
+}
+.missing-vault h1 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.missing-vault p {
+  margin: 0 0 14px;
+  color: var(--text-2);
+}
+.missing-path {
+  display: inline-block;
+  max-width: 100%;
+  margin-bottom: 22px;
+  padding: 4px 10px;
+  border: 1px solid var(--card-line);
+  border-radius: 8px;
+  background: var(--card);
+  font: 13px var(--mono);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.missing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.missing-vault .missing-hint {
+  font-size: 13px;
+  color: var(--text-3);
+}

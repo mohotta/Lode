@@ -45,6 +45,8 @@ export interface VaultInfo {
   id: string;
   name: string;
   path: string;
+  /** Set by `vault:list` when the folder is gone or is not a folder. Never stored. */
+  missing?: boolean;
 }
 
 export interface SubtopicInfo {

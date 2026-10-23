@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import type { FolderInfo, SubtopicInfo, VaultInfo } from '@shared/types';
+import appIcon from '../../../../build/icon.svg';
 import { ask } from '../api';
 import type { ThemePref } from '../theme';
 import {
@@ -16,6 +17,7 @@ import {
   SearchIcon,
   SunIcon,
   TrashIcon,
+  UpDownIcon,
 } from './Icons';
 import { Menu } from './Menu';
 
@@ -86,13 +88,14 @@ export function Sidebar(p: Props): React.JSX.Element {
           triggerClassName="vault-switch"
           trigger={
             <>
+              <img className="vault-tile" src={appIcon} alt="" aria-hidden="true" />
               <span className="vault-name">{vault?.name ?? 'No vault'}</span>
-              <ChevronDownIcon size={14} className="vault-chevron" />
+              <UpDownIcon size={14} className="vault-chevron" />
             </>
           }
           items={[
             ...p.vaults.map((v) => ({
-              label: v.name,
+              label: v.missing ? `${v.name} (folder missing)` : v.name,
               checked: v.id === p.activeVaultId,
               onSelect: () => p.onSelectVault(v.id),
             })),
@@ -100,21 +103,21 @@ export function Sidebar(p: Props): React.JSX.Element {
             { label: 'Open or create a vault…', icon: <PlusIcon size={14} />, onSelect: p.onOpenVault },
           ]}
         />
+        {vault && (
+          <button
+            className={`icon-btn side-search-btn ${p.searchOpen ? 'selected' : ''}`}
+            aria-label="Search"
+            title="Search points and notes (Ctrl+K)"
+            onClick={p.onOpenSearch}
+          >
+            <SearchIcon size={16} />
+          </button>
+        )}
       </div>
 
       <div className="sidebar-scroll">
         {vault ? (
           <>
-            <button
-              className={`side-search ${p.searchOpen ? 'selected' : ''}`}
-              aria-label="Search"
-              title="Search points and notes (Ctrl+K)"
-              onClick={p.onOpenSearch}
-            >
-              <SearchIcon size={15} />
-              <span className="side-search-label">Search</span>
-              <kbd>Ctrl K</kbd>
-            </button>
             <div className="nav-items">
               <button className={`tree-item review-item ${p.reviewOpen ? 'selected' : ''} ${p.reviewCount > 0 ? 'has-due' : ''}`} onClick={p.onOpenReview}>
                 <ReviewIcon size={15} className="tree-icon" />

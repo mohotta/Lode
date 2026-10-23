@@ -194,6 +194,12 @@ export const UndoIcon = (p: P): React.JSX.Element => (
   </Svg>
 );
 
+export const UpDownIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M5.5 6L8 3.5 10.5 6M5.5 10L8 12.5 10.5 10" />
+  </Svg>
+);
+
 export const InfoIcon = (p: P): React.JSX.Element => (
   <Svg {...p}>
     <circle cx="8" cy="8" r="6" />

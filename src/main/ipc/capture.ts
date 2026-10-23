@@ -7,7 +7,7 @@ import { handle } from './handle';
 
 export function registerCaptureHandlers(registry: VaultRegistry): void {
   handle('vault:list', async () => ({
-    vaults: await registry.list(),
+    vaults: await registry.listWithStatus(),
     lastVaultId: await registry.lastVaultId(),
   }));
 
@@ -25,6 +25,7 @@ export function registerCaptureHandlers(registry: VaultRegistry): void {
   });
 
   handle('vault:forget', async ({ vaultId }) => registry.forget(vaultId));
+  handle('vault:recreate', async ({ vaultId }) => registry.recreate(vaultId));
 
   handle('folder:list', async ({ vaultId }) => (await registry.get(vaultId)).service.listFolders());
   handle('folder:create', async ({ vaultId, title }) => (await registry.get(vaultId)).service.createFolder(title));

@@ -12,6 +12,7 @@ const api: LodeApi = {
     list: () => call('vault:list')(),
     open: () => call('vault:open')(),
     forget: (vaultId) => call('vault:forget')({ vaultId }),
+    recreate: (vaultId) => call('vault:recreate')({ vaultId }),
   },
   folder: {
     list: (vaultId) => call('folder:list')({ vaultId }),

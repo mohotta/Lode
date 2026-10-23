@@ -25,6 +25,8 @@ export interface LodeApi {
     list(): R<{ vaults: VaultInfo[]; lastVaultId: string | null }>;
     open(): R<VaultInfo | null>;
     forget(vaultId: string): R<void>;
+    /** Creates a missing vault's folder again, empty, at the same path. */
+    recreate(vaultId: string): R<VaultInfo>;
   };
   folder: {
     list(vaultId: string): R<FolderInfo[]>;

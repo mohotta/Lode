@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { JobView } from '@shared/ipc';
-import type { DigestInfo, ResolvedNote, SubtopicInfo } from '@shared/types';
+import type { BacklogDay, DigestInfo, ResolvedNote, SubtopicInfo } from '@shared/types';
 import { lode, unwrap } from '../api';
 import { dayMonth } from '../dates';
 import { host, LlmBlock, PointBlock, RawBlock, type LlmB } from './Blocks';
@@ -11,7 +11,6 @@ import {
   DotsIcon,
   DigestIcon,
   GridIcon,
-  HashIcon,
   ListIcon,
   NoteIcon,
   PlusIcon,
@@ -46,6 +45,10 @@ interface Props {
   onEditPoint(id: string, text: string): Promise<boolean>;
   onSetPointDeleted(id: string, deleted: boolean): Promise<void>;
   digests: DigestInfo[];
+  /** The open folder's backlog, newest first (for the folder overview). */
+  days: BacklogDay[];
+  /** Focuses the composer in the backlog pane. */
+  onAddPoint(): void;
   /** Point ID → notes it is filed in (for "Also in"). */
   filedIn: Map<string, string[]>;
   onNewDigest(): void;
@@ -87,9 +90,16 @@ function excerpt(md: string): string {
   return line ?? 'Code';
 }
 
+const monthAbbr = (date: string): string =>
+  new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: 'short' }).toUpperCase();
+
 export function NotePane(p: Props): React.JSX.Element {
   const { vaultId, folder, active, version, onError } = p;
   const [note, setNote] = useState<ResolvedNote | null>(null);
+  const onSelectRef = useRef(p.onSelect);
+  useEffect(() => {
+    onSelectRef.current = p.onSelect;
+  });
   const [mineOnly, setMineOnly] = useState<boolean>(loadMineOnly);
   const [layout, setLayout] = useState(loadLayout);
   const chooseLayout = (v: 'cards' | 'list'): void => {
@@ -117,19 +127,26 @@ export function NotePane(p: Props): React.JSX.Element {
       : lode.notes.read(vaultId, folder, active);
     unwrap(read).then(
       (n) => !cancelled && setNote(n),
-      (e: unknown) => !cancelled && onError(e instanceof Error ? e.message : String(e)),
+      (e: unknown) => {
+        if (cancelled) return;
+        onError(e instanceof Error ? e.message : String(e));
+        // The note is gone (deleted or renamed outside Lode): fall back to the folder overview.
+        onSelectRef.current(null);
+      },
     );
     return () => {
       cancelled = true;
     };
   }, [vaultId, folder, active, version, onError]);
 
+  // Newest first, as the backlog lists them.
+  const livePoints = p.days.flatMap((d) => d.points).filter((pt) => !pt.deleted);
   const isDigest = !!active?.startsWith(DIGEST_PREFIX);
   const activeSlug = isDigest && active ? active.slice(DIGEST_PREFIX.length) : active;
   const shown = note && activeSlug && note.slug === activeSlug && note.folder === folder ? note : null;
   const ai = shown?.blocks.filter((b) => b.kind === 'llm' && !b.duplicate).length ?? 0;
   const outlinePoints = (shown?.blocks ?? []).flatMap((b) =>
-    b.kind === 'point' && !b.missing && !b.deleted ? [{ id: b.id, text: excerpt(b.text) }] : [],
+    b.kind === 'point' && !b.missing && !b.deleted ? [{ id: b.id, text: excerpt(b.text), date: b.date }] : [],
   );
   const sources = [
     ...new Map(
@@ -341,52 +358,72 @@ export function NotePane(p: Props): React.JSX.Element {
             </section>
             <nav className="outline" aria-label="Outline">
               {outlinePoints.length > 0 && (
-                <>
-                  <h3 className="outline-head">Your points</h3>
-                  <ul role="list">
+                <section className="rail-sec">
+                  <h3 className="rail-head">
+                    Your points <span className="mono-count">{outlinePoints.length}</span>
+                  </h3>
+                  <ol className="rail-list">
                     {outlinePoints.map((pt) => (
                       <li key={pt.id}>
                         <button
-                          className={`outline-link point-link ${current === pt.id ? 'current' : ''}`}
+                          className={`rail-item point-link ${current === pt.id ? 'current' : ''}`}
                           aria-current={current === pt.id ? 'location' : undefined}
                           title={pt.text}
                           onClick={() => document.getElementById(`np-${pt.id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
                         >
-                          {pt.text}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-              {alsoIn.length > 0 && (
-                <>
-                  <h3 className="outline-head">Also in</h3>
-                  <ul role="list">
-                    {alsoIn.map((x) => (
-                      <li key={x.slug}>
-                        <button className="outline-link topic-link" onClick={() => p.onSelect(x.slug)}>
-                          {x.title}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-              {sources.length > 0 && (
-                <>
-                  <h3 className="outline-head">Sources</h3>
-                  <ol className="source-list">
-                    {sources.map((x, i) => (
-                      <li key={x.url}>
-                        <span className="source-n">{i + 1}</span>
-                        <button className="outline-link" title={x.url} onClick={() => void lode.link.open(x.url)}>
-                          {x.title || host(x.url)}
+                          <span className="rail-dot" aria-hidden="true" />
+                          <span className="rail-text">
+                            <span className="rail-title clamp2">{pt.text}</span>
+                            <span className="rail-meta mono">{dayMonth(pt.date)}</span>
+                          </span>
                         </button>
                       </li>
                     ))}
                   </ol>
-                </>
+                </section>
+              )}
+              {alsoIn.length > 0 && (
+                <section className="rail-sec">
+                  <h3 className="rail-head">
+                    Also in <span className="mono-count">{alsoIn.length}</span>
+                  </h3>
+                  <ul className="rail-list">
+                    {alsoIn.map((x) => (
+                      <li key={x.slug}>
+                        <button className="rail-item" onClick={() => p.onSelect(x.slug)}>
+                          <span className="rail-tile" aria-hidden="true">
+                            #
+                          </span>
+                          <span className="rail-text">
+                            <span className="rail-title one">{x.title}</span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {sources.length > 0 && (
+                <section className="rail-sec">
+                  <h3 className="rail-head">
+                    Sources <span className="mono-count">{sources.length}</span>
+                  </h3>
+                  <ol className="rail-list source-list">
+                    {sources.map((x, i) => (
+                      <li key={x.url}>
+                        <button className="rail-item" title={x.url} onClick={() => void lode.link.open(x.url)}>
+                          <span className="rail-tile source-n" aria-hidden="true">
+                            {i + 1}
+                          </span>
+                          <span className="rail-text">
+                            <span className="rail-title one">{x.title || host(x.url)}</span>
+                            <span className="rail-meta">{host(x.url)}</span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
               )}
             </nav>
           </div>
@@ -407,67 +444,149 @@ export function NotePane(p: Props): React.JSX.Element {
           </div>
         ) : (
           <div className="overview">
-            <div className="overview-head first">
-              <h2 className="overview-title">Subtopics</h2>
-              <div className="view-switch" role="radiogroup" aria-label="Layout">
-                {(['cards', 'list'] as const).map((v) => (
-                  <button
-                    key={v}
-                    role="radio"
-                    aria-checked={layout === v}
-                    aria-label={v === 'cards' ? 'Cards' : 'List'}
-                    title={v === 'cards' ? 'Cards' : 'List'}
-                    className={layout === v ? 'on' : ''}
-                    onClick={() => chooseLayout(v)}
-                  >
-                    {v === 'cards' ? <GridIcon size={14} /> : <ListIcon size={14} />}
-                  </button>
-                ))}
+            <div className="folder-head">
+              <div>
+                <h1 className="folder-title">{p.folderTitle}</h1>
+                <div className="folder-stats">
+                  <span>
+                    <b>{p.subtopics.length}</b> {p.subtopics.length === 1 ? 'subtopic' : 'subtopics'}
+                  </span>
+                  <span>
+                    <b>{livePoints.length}</b> {livePoints.length === 1 ? 'point' : 'points'}
+                  </span>
+                  {livePoints[0] && (
+                    <span>
+                      Last point <b>{dayMonth(livePoints[0].date)}</b>
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-            {p.subtopics.length === 0 ? (
-              <p className="muted small">Press Generate to organise your points into subtopics.</p>
-            ) : (
-              <ul className={layout === 'cards' ? 'cards' : 'topic-list'} role="list" aria-label="Subtopics">
-                {p.subtopics.map((s) => (
-                  <li key={s.slug}>
-                    <button className={layout === 'cards' ? 'card' : 'topic-row'} onClick={() => p.onSelect(s.slug)}>
-                      {layout === 'cards' && <HashIcon size={14} className="card-icon" />}
-                      <span className="topic-name">{s.title}</span>
-                      <span className="topic-sub">
-                        {s.pointCount} {s.pointCount === 1 ? 'point' : 'points'}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="overview-head">
-              <h2 className="overview-title">Digests</h2>
-              <button className="btn" onClick={p.onNewDigest}>
-                <PlusIcon size={13} /> New digest
+              <button className="btn primary tall" onClick={p.onAddPoint}>
+                Add a point
               </button>
             </div>
-            {p.digests.length === 0 ? (
-              <p className="muted small">Weekly and monthly recaps of your points appear here.</p>
-            ) : (
-              <ul className={layout === 'cards' ? 'cards' : 'topic-list'} role="list" aria-label="Digests">
-                {p.digests.map((d) => (
-                  <li key={d.id}>
+
+            <section className="folder-sec" aria-labelledby="h-subtopics">
+              <div className="overview-head first">
+                <h2 id="h-subtopics" className="overview-title">
+                  Subtopics
+                </h2>
+                <div className="seg view-switch" role="radiogroup" aria-label="Layout">
+                  {(['cards', 'list'] as const).map((v) => (
                     <button
-                      className={layout === 'cards' ? 'card' : 'topic-row'}
-                      onClick={() => p.onSelect(`${DIGEST_PREFIX}${d.id}`)}
+                      key={v}
+                      role="radio"
+                      aria-checked={layout === v}
+                      aria-label={v === 'cards' ? 'Cards' : 'List'}
+                      title={v === 'cards' ? 'Cards' : 'List'}
+                      className={layout === v ? 'on' : ''}
+                      onClick={() => chooseLayout(v)}
                     >
-                      {layout === 'cards' && <DigestIcon size={14} className="card-icon" />}
-                      <span className="topic-name">{d.title}</span>
-                      <span className="topic-sub">
-                        {d.kind === 'week' ? 'Weekly' : 'Monthly'} · {d.pointCount} {d.pointCount === 1 ? 'point' : 'points'}
-                      </span>
+                      {v === 'cards' ? <GridIcon size={14} /> : <ListIcon size={14} />}
                     </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                  ))}
+                </div>
+              </div>
+              {p.subtopics.length === 0 ? (
+                <p className="muted small">Press Generate to organise your points into subtopics.</p>
+              ) : (
+                <ul className={layout === 'cards' ? 'topic-cards' : 'row-card'} role="list" aria-label="Subtopics">
+                  {p.subtopics.map((s) => {
+                    const latest = livePoints.find((pt) => pt.filedUnder.includes(s.slug));
+                    const count = `${s.pointCount} ${s.pointCount === 1 ? 'point' : 'points'}`;
+                    return (
+                      <li key={s.slug}>
+                        {layout === 'cards' ? (
+                          <button className="topic-card" onClick={() => p.onSelect(s.slug)}>
+                            <span className="topic-name">{s.title}</span>
+                            {latest && <span className="topic-excerpt clamp2">{excerpt(latest.text)}</span>}
+                            <span className="topic-foot">
+                              <span className="topic-dots" aria-hidden="true">
+                                {Array.from({ length: Math.min(s.pointCount, 5) }, (_, i) => (
+                                  <span key={i} />
+                                ))}
+                              </span>
+                              <span>{count}</span>
+                              {latest && <span className="mono push">{dayMonth(latest.date)}</span>}
+                            </span>
+                          </button>
+                        ) : (
+                          <button className="topic-row-v2" onClick={() => p.onSelect(s.slug)}>
+                            <span className="row-main">
+                              <span className="row-title">{s.title}</span>
+                              {latest && <span className="row-sub one">{excerpt(latest.text)}</span>}
+                            </span>
+                            <span className="topic-count">{count}</span>
+                            <span className="mono topic-date">{latest ? dayMonth(latest.date) : ''}</span>
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
+            <div className="folder-cols">
+              <section className="folder-sec" aria-labelledby="h-digests">
+                <div className="overview-head first">
+                  <h2 id="h-digests" className="overview-title">
+                    Digests
+                  </h2>
+                  <button className="btn ghost" onClick={p.onNewDigest}>
+                    <PlusIcon size={13} /> New digest
+                  </button>
+                </div>
+                {p.digests.length === 0 ? (
+                  <p className="muted small">Weekly and monthly recaps of your points appear here.</p>
+                ) : (
+                  <ul className="digest-list" role="list" aria-label="Digests">
+                    {p.digests.map((d) => (
+                      <li key={d.id}>
+                        <button className="digest-row" onClick={() => p.onSelect(`${DIGEST_PREFIX}${d.id}`)}>
+                          <span className="cal-tile" aria-hidden="true">
+                            <span className="cal-tile-top">{monthAbbr(d.from)}</span>
+                            <span className="cal-tile-num">{d.kind === 'week' ? `W${d.id.split('-W')[1] ?? ''}` : `’${d.from.slice(2, 4)}`}</span>
+                          </span>
+                          <span className="row-main">
+                            <span className="row-title">{d.title}</span>
+                            <span className="row-sub">
+                              {d.kind === 'week' ? 'Weekly' : 'Monthly'} · {d.pointCount} {d.pointCount === 1 ? 'point' : 'points'}
+                            </span>
+                          </span>
+                          <ChevronRightIcon size={14} className="muted" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section className="folder-sec" aria-labelledby="h-latest">
+                <div className="overview-head first">
+                  <h2 id="h-latest" className="overview-title">
+                    Latest points
+                  </h2>
+                </div>
+                {livePoints.length === 0 ? (
+                  <p className="muted small">Nothing captured yet.</p>
+                ) : (
+                  <ol className="latest-list">
+                    {livePoints.slice(0, 6).map((pt) => (
+                      <li key={pt.id}>
+                        <time className="mono" dateTime={pt.date}>
+                          {dayMonth(pt.date)}
+                        </time>
+                        <button className="latest-link clamp2" onClick={() => p.onJumpToPoint(pt.id)}>
+                          {excerpt(pt.text)}
+                          {pt.corrected && <span className="latest-fix">needs a fix</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </section>
+            </div>
           </div>
         )}
       </div>
