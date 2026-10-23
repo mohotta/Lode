@@ -46,7 +46,8 @@ test('create folder, add points, see them in the backlog and on disk', async () 
 });
 
 test('Ctrl = zooms in, Ctrl - zooms out, Ctrl 0 resets, and the level is saved', async () => {
-  const { app, userData } = l;
+  const { app, page, userData } = l;
+  await page.waitForLoadState('load');
   const zoom = (): Promise<number> =>
     app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.getZoomLevel());
   // Drives the window's real before-input-event handler with the input a key press produces.
@@ -70,6 +71,21 @@ test('Ctrl = zooms in, Ctrl - zooms out, Ctrl 0 resets, and the level is saved',
     .toBe(0.5);
   await press('0');
   await expect.poll(zoom).toBe(0);
+  await press('=');
+  await expect.poll(zoom).toBe(0.5);
+});
+
+test('the saved zoom level is applied when the app starts', async () => {
+  const z = await launch({}, { zoomLevel: 1 });
+  try {
+    await expect
+      .poll(() => z.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.getZoomLevel()))
+      .toBeCloseTo(1, 5);
+  } finally {
+    await z.app.close();
+    await removeDir(z.vaultRoot);
+    await removeDir(z.userData);
+  }
 });
 
 test('renderer is sandboxed with no node access', async () => {
