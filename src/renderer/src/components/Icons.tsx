@@ -194,6 +194,19 @@ export const UndoIcon = (p: P): React.JSX.Element => (
   </Svg>
 );
 
+export const LockIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" />
+    <path d="M5.5 7V5a2.5 2.5 0 015 0v2" />
+  </Svg>
+);
+
+export const ShieldIcon = (p: P): React.JSX.Element => (
+  <Svg {...p}>
+    <path d="M8 2l5 2v3.5c0 3-2.2 5.4-5 6-2.8-.6-5-3-5-6V4z" />
+  </Svg>
+);
+
 export const BanIcon = (p: P): React.JSX.Element => (
   <Svg {...p}>
     <circle cx="8" cy="8" r="5.5" />

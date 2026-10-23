@@ -32,7 +32,7 @@ async function saveKeys(page: Page): Promise<void> {
   await page.getByLabel('Tavily search key API key').fill('tvly-e2e-fake');
   await page.getByRole('group', { name: 'Tavily search key' }).getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('group', { name: 'Tavily search key' }).getByText('Saved to secure storage')).toBeVisible();
-  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Close settings' }).click();
 }
 
 test('duplicates, point edit/delete, background generate, breadcrumb history, regenerate + undo, trash', async () => {

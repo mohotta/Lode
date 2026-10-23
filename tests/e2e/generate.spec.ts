@@ -69,7 +69,7 @@ test('BYOK settings, generate with search, highlighted user points vs AI blocks'
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.waitForTimeout(400); // let colour transitions settle before capturing
   await page.screenshot({ path: 'test-results/settings-dark.png' });
-  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Close settings' }).click();
 
   // --- Capture.
   await page.getByRole('button', { name: 'New folder', exact: true }).first().click();

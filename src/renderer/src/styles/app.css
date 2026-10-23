@@ -1672,8 +1672,7 @@ kbd {
   color: var(--text-2);
 }
 .field input,
-.field select,
-.key-row input {
+.field select {
   height: 32px;
   padding: 0 10px;
   border: 1px solid var(--line-strong);
@@ -1682,8 +1681,7 @@ kbd {
   outline: none;
 }
 .field input:focus,
-.field select:focus,
-.key-row input:focus {
+.field select:focus {
   border-color: var(--focus);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent);
 }
@@ -1691,9 +1689,6 @@ kbd {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-}
-.key-row input {
-  flex: 1 1 220px;
 }
 .check {
   display: flex;
@@ -1703,72 +1698,6 @@ kbd {
 }
 .check input {
   accent-color: var(--accent);
-}
-
-/* Settings page: one row per section, the title on the left and its controls on the right. */
-.settings.prefs {
-  max-width: 920px;
-  padding: 24px 32px 60px;
-}
-.prefs .center-header {
-  margin-bottom: 16px;
-}
-.prefs h1 {
-  font-size: 23px;
-}
-/* Each section is a card: title in the left column, controls on the right. */
-.prefs .field-group {
-  position: relative;
-  margin: 0 0 12px;
-  padding: 18px 20px 18px 244px;
-  border: 1px solid var(--card-line);
-  border-radius: 14px;
-  background: var(--card);
-}
-/* Absolutely positioned, so the legend sits in the left gutter instead of on the border. */
-.prefs .field-group > legend {
-  position: absolute;
-  top: 18px;
-  left: 20px;
-  width: 200px;
-  margin: 0;
-  padding: 0;
-  font-size: 14.5px;
-}
-.prefs .field-group > p {
-  margin: 0 0 10px;
-}
-.prefs .field {
-  grid-template-columns: 180px minmax(0, 1fr);
-  align-items: center;
-  column-gap: 12px;
-  margin: 8px 0;
-}
-.prefs .field input[type='number'] {
-  width: 110px;
-}
-.prefs .field select {
-  max-width: 320px;
-}
-.prefs .check {
-  margin: 0 0 6px;
-}
-.prefs .key-row + p {
-  margin-top: 6px;
-  margin-bottom: 0;
-}
-.prefs .dialog-actions {
-  margin-top: 10px;
-}
-@media (max-width: 1000px) {
-  .prefs .field-group {
-    padding-left: 20px;
-  }
-  .prefs .field-group > legend {
-    position: static;
-    width: auto;
-    margin-bottom: 8px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2733,4 +2662,364 @@ body.resizing {
   opacity: 1;
   background: var(--selected);
   color: var(--text-3);
+}
+
+/* ---------- Settings ---------- */
+/* A section list on the left, card sections on the right; everything saves as you change it. */
+.settings-v2 {
+  min-height: 100%;
+}
+.set-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-doc);
+}
+.set-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.set-title h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.set-close {
+  gap: 8px;
+  height: 32px;
+  background: none;
+  color: var(--text-2);
+}
+.set-close kbd {
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  font: 11px var(--mono);
+}
+.set-body {
+  display: flex;
+  gap: 48px;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+.set-nav {
+  position: sticky;
+  top: 92px;
+  align-self: flex-start;
+  flex: 0 0 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.set-nav button {
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: left;
+}
+.set-nav button:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.set-nav button.on {
+  color: var(--text);
+  background: var(--selected);
+}
+.set-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+.set-main > .banner {
+  margin: 0;
+}
+.set-section {
+  scroll-margin-top: 72px;
+}
+.set-section h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.set-sub {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--text-3);
+}
+.set-card {
+  border: 1px solid var(--card-line);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.set-card.padded {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px;
+}
+.set-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+}
+.set-row + .set-row {
+  border-top: 1px solid var(--card-line);
+}
+.set-row.stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.set-label {
+  min-width: 200px;
+}
+.set-name {
+  font-weight: 500;
+}
+.set-help {
+  font-size: 13.5px;
+  color: var(--text-3);
+}
+.set-strong {
+  color: var(--text);
+}
+.set-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.set-cap {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.set-grid {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+}
+.set-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.set-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.set-input {
+  height: 38px;
+  width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-doc);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+select.set-input {
+  width: auto;
+  min-width: 220px;
+  padding: 0 10px;
+}
+.set-input.mono {
+  font: 13.5px var(--mono);
+}
+.set-input:focus,
+.key-input:focus-within {
+  border-color: color-mix(in srgb, var(--accent-fill) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-fill) 14%, transparent);
+}
+.set-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.set-chip {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+.set-chip:hover {
+  color: var(--text);
+}
+.set-chip.on {
+  border-color: var(--accent-fill);
+  background: var(--selected);
+  color: var(--text);
+}
+/* Write-only key field. */
+.key-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.key-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.key-input {
+  flex: 1 1 260px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-doc);
+  color: var(--text-3);
+}
+.key-input input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+.btn.tall {
+  height: 38px;
+  padding: 0 14px;
+}
+.btn.quiet-danger {
+  border-color: transparent;
+  background: none;
+  color: var(--fix);
+}
+.btn.quiet-danger:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--hover);
+}
+.key-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.status-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.key-status.ok .status-dot {
+  background: var(--ok);
+}
+.key-status.err {
+  color: var(--danger);
+}
+.key-status.err .status-dot {
+  background: var(--danger);
+}
+/* On/off switch. */
+.switch {
+  flex: none;
+  display: flex;
+  width: 40px;
+  height: 24px;
+  padding: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background 0.15s;
+}
+.switch span {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  transition: transform 0.15s;
+}
+.switch.on {
+  background: var(--accent-fill);
+}
+.switch.on span {
+  transform: translateX(16px);
+}
+/* Round accent swatches with a ring on the chosen one. */
+.swatches.round .swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+  border: 2px solid transparent;
+  border-radius: 50%;
+}
+.swatches.round .swatch.on {
+  border-color: var(--sw);
+}
+.swatches.round .swatch-dot {
+  width: 18px;
+  height: 18px;
+}
+.set-privacy {
+  display: flex;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 14px;
+  color: var(--text-3);
+}
+.set-privacy svg {
+  flex: none;
+  margin-top: 3px;
+}
+.set-privacy h2 {
+  margin: 0 0 2px;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+.set-privacy p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+@media (max-width: 900px) {
+  .set-body {
+    flex-direction: column;
+    gap: 20px;
+  }
+  .set-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .set-grid.two,
+  .set-grid.three {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

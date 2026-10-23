@@ -97,7 +97,7 @@ test('review, search, Only mine and a weekly digest', async () => {
   await page.getByLabel('LLM API key API key').fill('sk-e2e-fake-key');
   await page.getByRole('group', { name: 'LLM API key' }).getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Saved to secure storage')).toBeVisible();
-  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Close settings' }).click();
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', { name: 'Kubernetes' }).click();
   await page.getByRole('button', { name: 'New digest' }).click();
   const picker = page.getByRole('dialog');

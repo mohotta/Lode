@@ -88,6 +88,8 @@ export function App(): React.JSX.Element {
   const pendingJump = useRef<string | null>(null);
   const scratchRef = useRef<RichEditorHandle>(null);
   const [theme, setTheme] = useTheme();
+  // Stable, so Settings' Escape listener isn't re-registered on every render.
+  const closeSettings = useCallback(() => setPage('main'), []);
   const [accent, setAccent] = useAccent();
   const [widths, setWidths] = usePaneWidths();
 
@@ -541,7 +543,13 @@ export function App(): React.JSX.Element {
 
       {page === 'settings' ? (
         <main className="settings-page" aria-label="Settings">
-          <SettingsView onClose={() => setPage('main')} accent={accent} onAccent={setAccent} />
+          <SettingsView
+            onClose={closeSettings}
+            accent={accent}
+            onAccent={setAccent}
+            theme={theme}
+            onTheme={setTheme}
+          />
         </main>
       ) : page === 'review' && vaultId ? (
         <main className="settings-page" aria-label="Review">
