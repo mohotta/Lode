@@ -16,6 +16,7 @@ export async function launch(
   extraEnv: Record<string, string> = {},
   settings: object = {},
   seed?: (vaultRoot: string) => Promise<void>,
+  vaultName = 'E2E Vault',
 ): Promise<Launched> {
   const userData = await tempDir('lode-e2e-profile-');
   const vaultRoot = await tempDir('lode-e2e-vault-');
@@ -24,7 +25,7 @@ export async function launch(
   const id = vaultIdFor(vaultRoot);
   await writeFile(
     join(userData, 'settings.json'),
-    JSON.stringify({ vaults: [{ id, path: vaultRoot, name: 'E2E Vault' }], lastVaultId: id, ...settings }),
+    JSON.stringify({ vaults: [{ id, path: vaultRoot, name: vaultName }], lastVaultId: id, ...settings }),
   );
   // LODE_E2E_EXECUTABLE runs the suite against a packaged build (e.g. dist/linux-unpacked/lode).
   const packaged = process.env.LODE_E2E_EXECUTABLE;

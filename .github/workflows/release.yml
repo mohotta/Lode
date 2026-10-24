@@ -1,0 +1,87 @@
+# Builds Linux, Windows and macOS packages on GitHub's hosted runners and publishes a GitHub Release.
+# Releasing: bump "version" in package.json, commit, then push a matching tag, e.g.
+#   git tag v0.1.4 && git push github v0.1.4
+# All builds are unsigned (Windows SmartScreen and macOS Gatekeeper will ask for approval).
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+            script: package
+            files: |
+              dist/*.AppImage
+              dist/*.deb
+              dist/*.rpm
+          - os: windows-latest
+            name: windows
+            script: package:win
+            files: dist/*.exe
+          - os: macos-latest
+            name: macos
+            # arm64 runner; electron-builder cross-builds the Intel dmg too.
+            script: package:mac --x64 --arm64
+            files: dist/*.dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install -g pnpm@12.14.0
+      - name: Tag must match package.json
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          [ "$GITHUB_REF_NAME" = "v$VERSION" ] || { echo "Tag $GITHUB_REF_NAME does not match package.json version $VERSION"; exit 1; }
+      - run: pnpm install --frozen-lockfile
+      - name: Install rpm tooling
+        if: matrix.name == 'linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends rpm libsecret-1-0 xvfb
+      - run: pnpm ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Smoke-test the packaged build
+        if: matrix.name == 'linux'
+        run: LODE_E2E_EXECUTABLE=dist/linux-unpacked/lode xvfb-run -a pnpm exec playwright test tests/e2e/capture.spec.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lode-${{ matrix.name }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l artifacts
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Lode $GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "Unsigned builds. Windows: run the Setup .exe (SmartScreen: More info, Run anyway). macOS: open the .dmg, drag Lode to Applications, then right-click Open the first time. Linux: AppImage (chmod +x), .deb or .rpm. Bring your own LLM key (Settings); your notes stay in the vault folder you choose."

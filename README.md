@@ -42,19 +42,25 @@ Everything is plain markdown in a folder you pick. There is no account, no serve
     <td align="center"><sub>Search keeps your points apart from AI text</sub></td>
     <td align="center"><sub>Review brings points back to read again</sub></td>
   </tr>
+  <tr>
+    <td colspan="2"><img src="assets/screenshots/notes-light.png" alt="A folder: subtopics and composed notes as cards, digests and the latest points"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><sub>A folder lists its subtopics and the notes you composed from them</sub></td>
+  </tr>
 </table>
 
 ## Download
 
-Get the latest build from the **[Releases page](https://gitlab.com/mohotta/lode/-/releases)**. Builds are currently Linux x86-64 only and unsigned.
+Get the latest build from the **[Releases page](https://github.com/mohotta/Lode/releases)** (also on [GitLab](https://gitlab.com/mohotta/lode/-/releases) for Linux). Builds for Linux, Windows and macOS are unsigned.
 
 | Format | Install |
 |---|---|
 | **AppImage** (any distribution) | `chmod +x Lode-*-x86_64.AppImage && ./Lode-*-x86_64.AppImage` |
 | **deb** (Debian, Ubuntu, Mint) | `sudo apt install ./lode_*_amd64.deb` |
 | **rpm** (Fedora, openSUSE) | `sudo dnf install ./lode-*.x86_64.rpm` |
-
-Windows and macOS installers can be built from source (see [Packaging](#packaging)); official builds for them are planned.
+| **Windows** (`Lode-Setup-*.exe`) | Run the installer. SmartScreen: *More info*, then *Run anyway*. |
+| **macOS** (`Lode-*-arm64.dmg` for Apple silicon, `Lode-*-x64.dmg` for Intel) | Drag Lode to Applications, then right-click and choose *Open* the first time. |
 
 ## Getting started
 
@@ -150,6 +156,8 @@ pnpm package        # Linux → dist/: AppImage, deb, rpm
 pnpm package:win    # Windows NSIS installer (run on Windows)
 pnpm package:mac    # macOS dmg (run on macOS)
 ```
+
+Releases are built by GitHub Actions (`.github/workflows/release.yml`): pushing a tag `vX.Y.Z` that matches `package.json` builds all three platforms and publishes a GitHub Release. To refresh the README screenshots: `LODE_SCREENSHOTS=1 pnpm test:e2e tests/e2e/screenshots.spec.ts`.
 
 deb and rpm use electron-builder's bundled fpm, which needs `libcrypt.so.1` (on Fedora: `sudo dnf install libxcrypt-compat`). To run the end-to-end suite against a packaged build: `LODE_E2E_EXECUTABLE=dist/linux-unpacked/lode pnpm exec playwright test`.
 
