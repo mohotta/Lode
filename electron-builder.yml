@@ -37,7 +37,7 @@ rpm:
 
 win:
   target: nsis
-  icon: build/icon.png
+  icon: build/icon.ico
 nsis:
   oneClick: false
   perMachine: false
@@ -47,6 +47,6 @@ nsis:
 mac:
   target: dmg
   category: public.app-category.productivity
-  icon: build/icon.png
+  icon: build/icon.icns
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
