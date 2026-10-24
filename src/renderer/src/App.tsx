@@ -847,7 +847,6 @@ export function App(): React.JSX.Element {
             onSetPointDeleted={setPointDeleted}
             digests={digests}
             days={days}
-            onAddPoint={() => scratchRef.current?.focus()}
             filedIn={filedIn}
             onNewDigest={() => setPickingDigest(true)}
             onRegenerateDigest={openDigestDialog}

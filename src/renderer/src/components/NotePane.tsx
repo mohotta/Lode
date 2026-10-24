@@ -50,8 +50,6 @@ interface Props {
   digests: DigestInfo[];
   /** The open folder's backlog, newest first (for the folder overview). */
   days: BacklogDay[];
-  /** Focuses the composer in the backlog pane. */
-  onAddPoint(): void;
   /** Point ID → notes it is filed in (for "Also in"). */
   filedIn: Map<string, string[]>;
   onNewDigest(): void;
@@ -116,7 +114,7 @@ export function NotePane(p: Props): React.JSX.Element {
   useEffect(() => {
     onSelectRef.current = p.onSelect;
   });
-  const [mineOnly, setMineOnly] = useState<boolean>(loadMineOnly);
+  const [mineOnlyPref, setMineOnly] = useState<boolean>(loadMineOnly);
   const [layout, setLayout] = useState(loadLayout);
   const chooseLayout = (v: 'cards' | 'list'): void => {
     setLayout(v);
@@ -161,6 +159,8 @@ export function NotePane(p: Props): React.JSX.Element {
   const livePoints = p.days.flatMap((d) => d.points).filter((pt) => !pt.deleted);
   const isDigest = !!active?.startsWith(DIGEST_PREFIX);
   const isArticle = !!active?.startsWith(ARTICLE_PREFIX);
+  // Notes are read whole: the All / Only mine switch applies to subtopic notes and digests only.
+  const mineOnly = mineOnlyPref && !isArticle;
   const activeSlug = active ? active.slice(isDigest ? DIGEST_PREFIX.length : isArticle ? ARTICLE_PREFIX.length : 0) : active;
   const digestInfo = isDigest ? p.digests.find((d) => d.id === activeSlug) : undefined;
   const shown = note && active && note.key === active && note.note.folder === folder ? note.note : null;
@@ -266,19 +266,21 @@ export function NotePane(p: Props): React.JSX.Element {
         </div>
         {shown && !isEditing && (
           <div className="note-actions">
-            <div className="seg" role="group" aria-label="Show">
-              {([false, true] as const).map((v) => (
-                <button
-                  key={String(v)}
-                  aria-pressed={mineOnly === v}
-                  className={mineOnly === v ? 'on' : ''}
-                  title={v ? 'Hide generated text and show only your own points' : 'Your points with generated context'}
-                  onClick={() => chooseMineOnly(v)}
-                >
-                  {v ? 'Only mine' : 'All'}
-                </button>
-              ))}
-            </div>
+            {!article && (
+              <div className="seg" role="group" aria-label="Show">
+                {([false, true] as const).map((v) => (
+                  <button
+                    key={String(v)}
+                    aria-pressed={mineOnly === v}
+                    className={mineOnly === v ? 'on' : ''}
+                    title={v ? 'Hide generated text and show only your own points' : 'Your points with generated context'}
+                    onClick={() => chooseMineOnly(v)}
+                  >
+                    {v ? 'Only mine' : 'All'}
+                  </button>
+                ))}
+              </div>
+            )}
             {shown.updated && !isDigest && !article && (
               <span className="updated" title={new Date(shown.updated).toLocaleString()}>
                 Updated {dayMonth(shown.updated)}
@@ -405,7 +407,6 @@ export function NotePane(p: Props): React.JSX.Element {
                           .join(', ')}`}
                       {article.topics.length > 0 && ` · also ${article.topics.join(', ')}`}
                       {article.updated && ` · updated ${dayMonth(article.updated)}`}
-                      {mineOnly && ai > 0 && ' · Generated sections hidden'}
                     </p>
                   )}
                   {isAsking && article && (
@@ -587,9 +588,6 @@ export function NotePane(p: Props): React.JSX.Element {
                   )}
                 </div>
               </div>
-              <button className="btn primary tall" onClick={p.onAddPoint}>
-                Add a point
-              </button>
             </div>
 
             <section className="folder-sec" aria-labelledby="h-subtopics">
@@ -665,29 +663,38 @@ export function NotePane(p: Props): React.JSX.Element {
               {p.articles.length === 0 ? (
                 <p className="muted small">Pick a few subtopics and the AI writes one note that ties them together. You can edit it.</p>
               ) : (
-                <ul className="row-card" role="list" aria-label="Notes">
-                  {p.articles.map((a) => (
-                    <li key={a.slug}>
-                      <button className="topic-row-v2" onClick={() => p.onSelect(`${ARTICLE_PREFIX}${a.slug}`)}>
-                        <span className="row-tile" aria-hidden="true">
-                          <NoteIcon size={15} />
-                        </span>
-                        <span className="row-main">
-                          <span className="row-title">{a.title}</span>
-                          <span className="row-sub one">
-                            {[
-                              ...a.subtopics.map((slug) => p.subtopics.find((x) => x.slug === slug)?.title ?? slug),
-                              ...a.topics,
-                            ].join(' · ') || 'Note'}
-                          </span>
-                        </span>
-                        <span className="topic-count">
-                          {a.pointCount} {a.pointCount === 1 ? 'point' : 'points'}
-                        </span>
-                        <span className="mono topic-date">{a.updated ? dayMonth(a.updated) : ''}</span>
-                      </button>
-                    </li>
-                  ))}
+                <ul className={layout === 'cards' ? 'topic-cards' : 'row-card'} role="list" aria-label="Notes">
+                  {p.articles.map((a) => {
+                    const from =
+                      [...a.subtopics.map((slug) => p.subtopics.find((x) => x.slug === slug)?.title ?? slug), ...a.topics].join(' · ') ||
+                      'Note';
+                    const count = `${a.pointCount} ${a.pointCount === 1 ? 'point' : 'points'}`;
+                    const open = (): void => p.onSelect(`${ARTICLE_PREFIX}${a.slug}`);
+                    return (
+                      <li key={a.slug}>
+                        {layout === 'cards' ? (
+                          <button className="topic-card" onClick={open}>
+                            <span className="topic-name">{a.title}</span>
+                            <span className="topic-excerpt clamp2">{from}</span>
+                            <span className="topic-foot">
+                              <NoteIcon size={13} />
+                              <span>{count}</span>
+                              {a.updated && <span className="mono push">{dayMonth(a.updated)}</span>}
+                            </span>
+                          </button>
+                        ) : (
+                          <button className="topic-row-v2" onClick={open}>
+                            <span className="row-main">
+                              <span className="row-title">{a.title}</span>
+                              <span className="row-sub one">{from}</span>
+                            </span>
+                            <span className="topic-count">{count}</span>
+                            <span className="mono topic-date">{a.updated ? dayMonth(a.updated) : ''}</span>
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </section>

@@ -66,6 +66,10 @@ test('compose a note from subtopics, edit it by hand and with AI, then undo', as
   await dialog.getByRole('button', { name: 'Write note', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Background jobs' }).getByText('Written')).toBeVisible();
 
+  await page.screenshot({ path: 'test-results/notes-cards.png' });
+  await page.getByRole('radio', { name: 'List' }).click();
+  await page.screenshot({ path: 'test-results/notes-list.png' });
+  await page.getByRole('radio', { name: 'Cards' }).click();
   await page.getByRole('list', { name: 'Notes' }).getByRole('button', { name: /Cluster networking/ }).click();
   const note = page.getByRole('region', { name: 'Cluster networking' });
   await expect(note.getByRole('heading', { name: 'How Services work' })).toBeVisible();
