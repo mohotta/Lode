@@ -80,6 +80,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -l artifacts
+          # Re-runs and tags that already have a release just get the files (re)uploaded.
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" artifacts/* --repo "$GITHUB_REPOSITORY" --clobber
+            exit 0
+          fi
           gh release create "$GITHUB_REF_NAME" artifacts/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "Lode $GITHUB_REF_NAME" \
