@@ -71,6 +71,36 @@ export const DigestOutputSchema = z.object({
     .max(20),
 });
 export type DigestOutput = z.infer<typeof DigestOutputSchema>;
+
+/** Note (article) output: sections written from chosen subtopics. Points by ID only (invariant 2). */
+export const ArticleOutputSchema = z.object({
+  sections: z
+    .array(
+      z.object({
+        heading: z.string().min(1).max(200),
+        body: z.string().max(12000).default(''),
+        pointIds: z.array(z.string().max(32)).max(200).default([]),
+      }),
+    )
+    .min(1)
+    .max(30),
+});
+export type ArticleOutput = z.infer<typeof ArticleOutputSchema>;
+
+/** The checker's verdict on a note draft. An empty list means it found nothing to fix. */
+export const ArticleCheckSchema = z.object({
+  issues: z
+    .array(
+      z.object({
+        section: z.number().int().min(0).max(100).default(0),
+        problem: z.string().min(1).max(1000),
+        fix: z.string().max(2000).default(''),
+      }),
+    )
+    .max(30)
+    .default([]),
+});
+export type ArticleCheck = z.infer<typeof ArticleCheckSchema>;
 export type Assignment = z.infer<typeof AssignmentSchema>;
 export type Correction = z.infer<typeof CorrectionSchema>;
 

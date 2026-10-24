@@ -7,13 +7,19 @@ export interface JobSpec {
   vaultId: string;
   folder: string;
   folderTitle: string;
-  kind: 'generate' | 'regenerate' | 'digest';
+  kind: 'generate' | 'regenerate' | 'digest' | 'article';
   /** Regenerate only: the note being rewritten. */
   subtopic?: string;
   subtopicTitle?: string;
   /** Digest only: the period ID and its title. */
   digest?: string;
   digestTitle?: string;
+  /** Note only: the slug of the note to edit with AI (absent for a new note), its title and the request. */
+  article?: string;
+  articleTitle?: string;
+  instruction?: string;
+  articleSubtopics?: string[];
+  articleTopics?: string[];
 }
 
 export interface Job<R> extends JobSpec {
@@ -60,7 +66,10 @@ export class JobQueue<R> {
         j.folder === spec.folder &&
         j.kind === spec.kind &&
         j.subtopic === spec.subtopic &&
-        j.digest === spec.digest,
+        j.digest === spec.digest &&
+        j.article === spec.article &&
+        j.articleTitle === spec.articleTitle &&
+        j.instruction === spec.instruction,
     );
     if (waiting) return { ...waiting };
     const job: Job<R> = { ...spec, id: this.newId(), status: 'queued', progress: null, queuedAt: new Date().toISOString() };

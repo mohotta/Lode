@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { digestSystemPrompt, systemPrompt, userPrompt } from '../generation/prompt';
+import { articleSystemPrompt, digestSystemPrompt, systemPrompt, userPrompt } from '../generation/prompt';
 import { postJson, type FetchLike } from './http';
 import {
   ProviderError,
@@ -63,22 +63,31 @@ const WEB_SEARCH_TOOL = {
 /** Extracts a JSON object from model text, tolerating code fences and surrounding prose. */
 export function extractJson(text: string): unknown {
   const trimmed = text.trim();
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
-  const candidate = fenced?.[1]?.trim() ?? trimmed;
-  try {
-    return JSON.parse(candidate);
-  } catch {
-    const start = candidate.indexOf('{');
-    const end = candidate.lastIndexOf('}');
-    if (start !== -1 && end > start) {
-      try {
-        return JSON.parse(candidate.slice(start, end + 1));
-      } catch {
-        // fall through
-      }
+  const parse = (s: string): unknown => {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return undefined;
     }
-    return undefined;
+  };
+  // Plain JSON first: string values may hold fenced code blocks (notes ask for code examples),
+  // so a fence inside the reply must not be mistaken for a fence around it.
+  const whole = parse(trimmed);
+  if (whole !== undefined) return whole;
+  // A reply wrapped in one fence: strip the opening line and the last closing fence.
+  const wrapped = /^```[a-z]*\s*\n([\s\S]*)\n```\s*$/i.exec(trimmed);
+  const unwrapped = wrapped?.[1] !== undefined ? parse(wrapped[1]) : undefined;
+  if (unwrapped !== undefined) return unwrapped;
+  // Prose around the object.
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    const sliced = parse(trimmed.slice(start, end + 1));
+    if (sliced !== undefined) return sliced;
   }
+  // A fenced object somewhere inside prose.
+  const fenced = /```(?:json)?\s*(\{[\s\S]*?\})\s*```/i.exec(trimmed);
+  return fenced?.[1] ? parse(fenced[1]) : undefined;
 }
 
 export interface OpenAiCompatibleOptions {
@@ -139,9 +148,11 @@ export class OpenAiCompatibleAdapter implements LlmAdapter {
     const messages: Message[] = [
       {
         role: 'system',
-        content: input.digest
-          ? digestSystemPrompt()
-          : systemPrompt({ useSearch, maxSearches: opts.maxSearches, regenerate: !!input.regenerate }),
+        content: input.article
+          ? articleSystemPrompt(input.article.mode, { useSearch, maxSearches: opts.maxSearches })
+          : input.digest
+            ? digestSystemPrompt()
+            : systemPrompt({ useSearch, maxSearches: opts.maxSearches, regenerate: !!input.regenerate }),
       },
       { role: 'user', content: userPrompt(input) },
     ];

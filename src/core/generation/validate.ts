@@ -1,7 +1,16 @@
 import type { PointId } from '@shared/types';
 import { slugify } from '../formats/slug';
 import type { SearchResult } from '../llm/types';
-import { DigestOutputSchema, GenerationOutputSchema, type DigestOutput, type GenerationOutput } from './schema';
+import {
+  ArticleCheckSchema,
+  ArticleOutputSchema,
+  DigestOutputSchema,
+  GenerationOutputSchema,
+  type ArticleCheck,
+  type ArticleOutput,
+  type DigestOutput,
+  type GenerationOutput,
+} from './schema';
 import { sanitizeInline, sanitizeLinkTitle, sanitizeLlmText } from './sanitize';
 import { AllowedUrls, markdownHref } from './urls';
 
@@ -276,4 +285,86 @@ export function validateDigest(output: DigestOutput, sentIds: readonly PointId[]
   if (invented) warnings.push(`Ignored ${invented} point ID(s) the model invented.`);
   if (stripped) warnings.push(`Removed ${stripped} link(s); digests are not web-sourced.`);
   return { summary: clean(output.summary), themes, leftovers: sentIds.filter((id) => !used.has(id)), warnings };
+}
+
+export type ArticleParseResult = { ok: true; output: ArticleOutput } | { ok: false; error: string };
+export type CheckParseResult = { ok: true; output: ArticleCheck } | { ok: false; error: string };
+
+function firstIssue(issues: readonly { path: PropertyKey[]; message: string }[]): string {
+  const first = issues[0];
+  return first ? `${first.path.join('.') || 'root'}: ${first.message}` : 'invalid output';
+}
+
+const NOT_JSON = 'the reply was not a single valid JSON object (it may have been cut off)';
+
+export function parseArticleOutput(json: unknown): ArticleParseResult {
+  if (json === undefined) return { ok: false, error: NOT_JSON };
+  const r = ArticleOutputSchema.safeParse(json);
+  return r.success ? { ok: true, output: r.data } : { ok: false, error: firstIssue(r.error.issues) };
+}
+
+export function parseArticleCheck(json: unknown): CheckParseResult {
+  if (json === undefined) return { ok: false, error: NOT_JSON };
+  const r = ArticleCheckSchema.safeParse(json);
+  return r.success ? { ok: true, output: r.data } : { ok: false, error: firstIssue(r.error.issues) };
+}
+
+export interface ValidSection {
+  heading: string;
+  body: string;
+  pointIds: PointId[];
+  /** No point and no verified link backs this section (invariant 6: flagged, not dropped). */
+  unsourced: boolean;
+}
+
+export interface ValidArticle {
+  sections: ValidSection[];
+  warnings: string[];
+}
+
+/**
+ * Notes (articles): links must be to a URL from this job's search results or one already in
+ * the material or the note; others become their label. Each point may appear once.
+ */
+export function validateArticle(output: ArticleOutput, ctx: { sentIds: readonly PointId[]; allowed: AllowedUrls }): ValidArticle {
+  const sent = new Set<string>(ctx.sentIds);
+  let stripped = 0;
+  let invented = 0;
+  const used = new Set<PointId>();
+  const sections: ValidSection[] = [];
+  for (const sec of output.sections) {
+    const ids: PointId[] = [];
+    for (const raw of sec.pointIds) {
+      if (!sent.has(raw)) {
+        invented++;
+        continue;
+      }
+      if (used.has(raw as PointId)) continue;
+      used.add(raw as PointId);
+      ids.push(raw as PointId);
+    }
+    const heading = sanitizeInline(sec.heading).replace(/^#+\s*/, '').slice(0, 80);
+    const body = filterLinks(sanitizeLlmText(sec.body), ctx.allowed, () => stripped++);
+    if (!heading || (!body && ids.length === 0)) continue;
+    const cited = /\[[^\]\n]*\]\(https?:/.test(body);
+    sections.push({ heading, body, pointIds: ids, unsourced: ids.length === 0 && !cited });
+  }
+  const warnings: string[] = [];
+  if (invented) warnings.push(`Ignored ${invented} point ID(s) the model invented.`);
+  if (stripped) warnings.push(`Removed ${stripped} link(s) that were not in the search results or the material.`);
+  const unsourced = sections.filter((x) => x.unsourced).length;
+  if (unsourced) warnings.push(`${unsourced} section(s) have no cited source and are marked.`);
+  return { sections, warnings };
+}
+
+/** The checker's issues, cleaned for the next prompt. Section numbers outside the draft count as the whole note. */
+export function validateCheck(output: ArticleCheck, sections: number): { section: number; problem: string; fix: string }[] {
+  return output.issues
+    .map((i) => ({
+      section: i.section >= 1 && i.section <= sections ? i.section : 0,
+      problem: sanitizeInline(i.problem).slice(0, 500),
+      fix: sanitizeInline(i.fix).slice(0, 800),
+    }))
+    .filter((i) => i.problem)
+    .slice(0, 20);
 }

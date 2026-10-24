@@ -1,10 +1,12 @@
 import type { AddResult, JobView, KeyIdName, PreviewView, Result, SettingsView } from '@shared/ipc';
 import type {
+  ArticleInfo,
   BacklogDay,
   DigestInfo,
   DigestPeriod,
   FolderInfo,
   Point,
+  ResolvedArticle,
   ResolvedNote,
   ReviewItem,
   ReviewStage,
@@ -14,8 +16,20 @@ import type {
   VaultInfo,
 } from '@shared/types';
 
-/** What a Generate-family job works on: unfiled points (empty), one note, or one digest period. */
-export type JobTarget = { subtopic?: string; digest?: string };
+/** A note (article) job: a new note from subtopics and topics, or (with `slug`) an AI edit. */
+export interface ArticleJob {
+  slug?: string;
+  title?: string;
+  subtopics?: string[];
+  topics?: string[];
+  instruction?: string;
+}
+
+/** What a Generate-family job works on: unfiled points (empty), one note, one digest period or a composed note. */
+export type JobTarget = { subtopic?: string; digest?: string; article?: ArticleJob };
+
+/** One block of a hand-edited note. Text without `body` is kept unchanged. */
+export type ArticleEditBlock = { kind: 'point'; id: string } | { kind: 'text'; id?: string; body?: string };
 
 type R<T> = Promise<Result<T>>;
 
@@ -76,6 +90,20 @@ export interface LodeApi {
     read(vaultId: string, folder: string, digest: string): R<ResolvedNote>;
     delete(vaultId: string, folder: string, digest: string): R<void>;
   };
+  /** Notes: composed articles in `<folder>/articles/`. */
+  article: {
+    list(vaultId: string, folder: string): R<ArticleInfo[]>;
+    read(vaultId: string, folder: string, article: string): R<ResolvedArticle>;
+    save(
+      vaultId: string,
+      folder: string,
+      article: string,
+      edit: { expected: string; title?: string; blocks: ArticleEditBlock[] },
+    ): R<ResolvedArticle>;
+    /** Restores the version before the last AI edit or hand edit. */
+    undo(vaultId: string, folder: string, article: string): R<void>;
+    delete(vaultId: string, folder: string, article: string): R<void>;
+  };
   link: {
     open(url: string): R<void>;
   };
@@ -95,9 +123,9 @@ export interface LodeApi {
     clear(id: KeyIdName): R<boolean>;
   };
   generate: {
-    /** With a target, previews a Regenerate of that note or a digest for that period. */
+    /** With a target, previews a Regenerate of that note, a digest for that period or a note job. */
     preview(vaultId: string, folder: string, target?: JobTarget): R<PreviewView>;
-    /** Queues a background Generate, Regenerate or digest and returns at once. */
+    /** Queues a background Generate, Regenerate, digest or note job and returns at once. */
     enqueue(vaultId: string, folder: string, target?: JobTarget): R<JobView>;
     jobs(): R<JobView[]>;
     cancel(jobId: string): R<void>;

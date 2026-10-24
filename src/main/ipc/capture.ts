@@ -1,7 +1,7 @@
 import { BrowserWindow, dialog, shell } from 'electron';
 import { resolveNote } from '@core/repos/resolveNote';
 import type { AddResult } from '@shared/ipc';
-import type { PointId } from '@shared/types';
+import type { PointId, ResolvedArticle } from '@shared/types';
 import type { VaultRegistry } from '../VaultRegistry';
 import { handle } from './handle';
 
@@ -112,6 +112,24 @@ export function registerCaptureHandlers(registry: VaultRegistry): void {
     if (!note) throw new Error('Digest not found');
     return resolveNote(folder, digest, note, await v.backlog.listPoints(folder));
   });
+  handle('article:list', async ({ vaultId, folder }) => (await registry.get(vaultId)).articles.list(folder));
+  async function resolvedArticle(vaultId: string, folder: string, slug: string): Promise<ResolvedArticle> {
+    const v = await registry.get(vaultId);
+    const a = await v.articles.read(folder, slug);
+    if (!a) throw new Error('Note not found');
+    const note = { meta: { folder, subtopic: slug, title: a.meta.title, updated: a.meta.updated }, blocks: a.blocks };
+    const resolved = resolveNote(folder, slug, note, await v.backlog.listPoints(folder), await v.articles.canUndo(folder, slug, a));
+    return { ...resolved, subtopics: a.meta.subtopics, topics: a.meta.topics };
+  }
+  handle('article:read', async ({ vaultId, folder, article }) => resolvedArticle(vaultId, folder, article));
+  handle('article:save', async ({ vaultId, folder, article, expected, title, blocks }) => {
+    const v = await registry.get(vaultId);
+    const edit = { expected, blocks: blocks.map((b) => (b.kind === 'point' ? { kind: 'point' as const, id: b.id as PointId } : b)) };
+    await v.articles.saveEdits(folder, article, title ? { ...edit, title } : edit);
+    return resolvedArticle(vaultId, folder, article);
+  });
+  handle('article:undo', async ({ vaultId, folder, article }) => (await registry.get(vaultId)).articles.undo(folder, article));
+  handle('article:delete', async ({ vaultId, folder, article }) => (await registry.get(vaultId)).articles.delete(folder, article));
   handle('digest:delete', async ({ vaultId, folder, digest }) => (await registry.get(vaultId)).digests.delete(folder, digest));
 
   // Local only: the index is built from the vault's own files (invariant 8).

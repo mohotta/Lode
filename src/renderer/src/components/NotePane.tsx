@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { JobView } from '@shared/ipc';
-import type { BacklogDay, DigestInfo, ResolvedNote, SubtopicInfo } from '@shared/types';
+import type { ArticleInfo, BacklogDay, DigestInfo, ResolvedArticle, ResolvedNote, SubtopicInfo } from '@shared/types';
 import { lode, unwrap } from '../api';
 import { dayMonth } from '../dates';
+import { ArticleEditor } from './ArticleEditor';
 import { host, LlmBlock, PointBlock, RawBlock, type LlmB } from './Blocks';
 import {
   ArrowLeftIcon,
@@ -12,8 +13,10 @@ import {
   GridIcon,
   ListIcon,
   NoteIcon,
+  PencilIcon,
   PlusIcon,
   RefreshIcon,
+  SparkIcon,
   TrashIcon,
   UndoIcon,
 } from './Icons';
@@ -54,10 +57,19 @@ interface Props {
   onNewDigest(): void;
   onRegenerateDigest(id: string, title: string): void;
   onDeleteDigest(id: string, title: string): void;
+  articles: ArticleInfo[];
+  onNewArticle(): void;
+  /** Opens the AI edit preview for a note with the user's instruction. */
+  onReviseArticle(slug: string, title: string, instruction: string): void;
+  onSaveArticle(slug: string, edit: Parameters<typeof lode.article.save>[3]): Promise<boolean>;
+  onUndoArticle(slug: string): Promise<void>;
+  onDeleteArticle(slug: string, title: string): void;
 }
 
 /** Notes and digests share the pane; a digest is addressed as `digest:<period>`. */
 export const DIGEST_PREFIX = 'digest:';
+/** A composed note (article) is addressed as `article:<slug>`. */
+export const ARTICLE_PREFIX = 'article:';
 
 const MINE_ONLY_KEY = 'lode.mineOnly';
 const LAYOUT_KEY = 'lode.overviewLayout';
@@ -95,7 +107,11 @@ const monthAbbr = (date: string): string =>
 
 export function NotePane(p: Props): React.JSX.Element {
   const { vaultId, folder, active, version, onError } = p;
-  const [note, setNote] = useState<ResolvedNote | null>(null);
+  // Keyed by the address it was read for, since a note and a subtopic may share a slug.
+  const [note, setNote] = useState<{ key: string; note: ResolvedNote | ResolvedArticle } | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [asking, setAsking] = useState<string | null>(null);
+  const [instruction, setInstruction] = useState('');
   const onSelectRef = useRef(p.onSelect);
   useEffect(() => {
     onSelectRef.current = p.onSelect;
@@ -122,11 +138,13 @@ export function NotePane(p: Props): React.JSX.Element {
   useEffect(() => {
     let cancelled = false;
     if (!vaultId || !folder || !active) return;
-    const read = active.startsWith(DIGEST_PREFIX)
-      ? lode.digest.read(vaultId, folder, active.slice(DIGEST_PREFIX.length))
-      : lode.notes.read(vaultId, folder, active);
-    unwrap(read).then(
-      (n) => !cancelled && setNote(n),
+    const read: Promise<ResolvedNote | ResolvedArticle> = active.startsWith(DIGEST_PREFIX)
+      ? unwrap(lode.digest.read(vaultId, folder, active.slice(DIGEST_PREFIX.length)))
+      : active.startsWith(ARTICLE_PREFIX)
+        ? unwrap(lode.article.read(vaultId, folder, active.slice(ARTICLE_PREFIX.length)))
+        : unwrap(lode.notes.read(vaultId, folder, active));
+    read.then(
+      (n) => !cancelled && setNote({ key: active, note: n }),
       (e: unknown) => {
         if (cancelled) return;
         onError(e instanceof Error ? e.message : String(e));
@@ -142,9 +160,14 @@ export function NotePane(p: Props): React.JSX.Element {
   // Newest first, as the backlog lists them.
   const livePoints = p.days.flatMap((d) => d.points).filter((pt) => !pt.deleted);
   const isDigest = !!active?.startsWith(DIGEST_PREFIX);
-  const activeSlug = isDigest && active ? active.slice(DIGEST_PREFIX.length) : active;
+  const isArticle = !!active?.startsWith(ARTICLE_PREFIX);
+  const activeSlug = active ? active.slice(isDigest ? DIGEST_PREFIX.length : isArticle ? ARTICLE_PREFIX.length : 0) : active;
   const digestInfo = isDigest ? p.digests.find((d) => d.id === activeSlug) : undefined;
-  const shown = note && activeSlug && note.slug === activeSlug && note.folder === folder ? note : null;
+  const shown = note && active && note.key === active && note.note.folder === folder ? note.note : null;
+  // Reads under `article:` return an article (see the effect above).
+  const article = isArticle && shown ? (shown as ResolvedArticle) : null;
+  const isEditing = !!article && editing === active;
+  const isAsking = !!article && asking === active && !p.regenJob;
   const ai = shown?.blocks.filter((b) => b.kind === 'llm' && !b.duplicate).length ?? 0;
   const outlinePoints = (shown?.blocks ?? []).flatMap((b) =>
     b.kind === 'point' && !b.missing && !b.deleted ? [{ id: b.id, text: excerpt(b.text), date: b.date }] : [],
@@ -241,7 +264,7 @@ export function NotePane(p: Props): React.JSX.Element {
             </nav>
           )}
         </div>
-        {shown && (
+        {shown && !isEditing && (
           <div className="note-actions">
             <div className="seg" role="group" aria-label="Show">
               {([false, true] as const).map((v) => (
@@ -256,7 +279,7 @@ export function NotePane(p: Props): React.JSX.Element {
                 </button>
               ))}
             </div>
-            {shown.updated && !isDigest && (
+            {shown.updated && !isDigest && !article && (
               <span className="updated" title={new Date(shown.updated).toLocaleString()}>
                 Updated {dayMonth(shown.updated)}
               </span>
@@ -267,11 +290,43 @@ export function NotePane(p: Props): React.JSX.Element {
                 {p.regenJob.status === 'queued' ? 'Queued' : isDigest ? 'Writing…' : 'Rewriting…'}
               </button>
             )}
+            {article && !p.regenJob && (
+              <>
+                <button className="btn" onClick={() => setEditing(active)} title="Edit the text yourself">
+                  <PencilIcon size={13} /> Edit
+                </button>
+                <button
+                  className={`btn ${isAsking ? 'on' : ''}`}
+                  aria-expanded={isAsking}
+                  onClick={() => setAsking(isAsking ? null : active)}
+                  title="Tell the AI what to change"
+                >
+                  <SparkIcon size={13} /> Edit with AI
+                </button>
+              </>
+            )}
             <Menu
               label="Note actions"
               trigger={<DotsIcon size={15} />}
               align="end"
-              items={isDigest ? [
+              items={article ? [
+                ...(article.canUndo
+                  ? [
+                      {
+                        label: 'Undo last change',
+                        icon: <UndoIcon size={14} />,
+                        onSelect: () => void p.onUndoArticle(article.slug),
+                      },
+                      'separator' as const,
+                    ]
+                  : []),
+                {
+                  label: 'Delete note',
+                  icon: <TrashIcon size={14} />,
+                  danger: true,
+                  onSelect: () => p.onDeleteArticle(article.slug, article.title),
+                },
+              ] : isDigest ? [
                 ...(p.regenJob
                   ? []
                   : [
@@ -324,45 +379,119 @@ export function NotePane(p: Props): React.JSX.Element {
         {shown ? (
           <div className="reader">
             <section className="note" aria-labelledby="note-title">
-              <h2 id="note-title" className="note-title">
-                {shown.title}
-              </h2>
-              {(isDigest || (mineOnly && ai > 0)) && (
-                <p className="note-meta">
-                  {isDigest && digestInfo && (
-                    <>
-                      <span className="meta-strong">{digestInfo.kind === 'week' ? 'Weekly digest' : 'Monthly digest'}</span>
-                      {` · ${digestInfo.pointCount} ${digestInfo.pointCount === 1 ? 'point' : 'points'}`}
-                    </>
+              {isEditing && article ? (
+                <>
+                  <h2 id="note-title" className="visually-hidden">
+                    Editing {article.title}
+                  </h2>
+                  <ArticleEditor
+                    key={article.updated}
+                    article={article}
+                    onSave={(edit) => p.onSaveArticle(article.slug, edit)}
+                    onCancel={() => setEditing(null)}
+                  />
+                </>
+              ) : (
+                <>
+                  <h2 id="note-title" className="note-title">
+                    {shown.title}
+                  </h2>
+                  {article && (
+                    <p className="note-meta">
+                      <span className="meta-strong">Note</span>
+                      {article.subtopics.length > 0 &&
+                        ` · from ${article.subtopics
+                          .map((slug) => p.subtopics.find((x) => x.slug === slug)?.title ?? slug)
+                          .join(', ')}`}
+                      {article.topics.length > 0 && ` · also ${article.topics.join(', ')}`}
+                      {article.updated && ` · updated ${dayMonth(article.updated)}`}
+                      {mineOnly && ai > 0 && ' · Generated sections hidden'}
+                    </p>
                   )}
-                  {isDigest && !digestInfo && <span className="meta-strong">Digest</span>}
-                  {isDigest && ` · written ${dayMonth(shown.updated)}`}
-                  {isDigest && mineOnly && ai > 0 && ' · '}
-                  {mineOnly && ai > 0 && 'Generated sections hidden'}
-                </p>
+                  {isAsking && article && (
+                    <form
+                      className="ask-bar"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const text = instruction.trim();
+                        if (!text) return;
+                        p.onReviseArticle(article.slug, article.title, text);
+                        setAsking(null);
+                        setInstruction('');
+                      }}
+                    >
+                      <label className="visually-hidden" htmlFor="ask-input">
+                        What should the AI change?
+                      </label>
+                      <textarea
+                        id="ask-input"
+                        className="text-input"
+                        rows={2}
+                        maxLength={2000}
+                        value={instruction}
+                        autoFocus
+                        placeholder="What should change? e.g. “Add a section on useTransition with an example” or “Make it shorter”"
+                        onChange={(e) => setInstruction(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setAsking(null);
+                          } else if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            e.currentTarget.form?.requestSubmit();
+                          }
+                        }}
+                      />
+                      <div className="ask-foot">
+                        <span className="muted small">The AI may rewrite the whole note, then checks it for errors. You can undo.</span>
+                        <button type="button" className="btn" onClick={() => setAsking(null)}>
+                          Cancel
+                        </button>
+                        <button type="submit" className="btn primary" disabled={!instruction.trim()}>
+                          Continue
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                  {!article && (isDigest || (mineOnly && ai > 0)) && (
+                    <p className="note-meta">
+                      {isDigest && digestInfo && (
+                        <>
+                          <span className="meta-strong">{digestInfo.kind === 'week' ? 'Weekly digest' : 'Monthly digest'}</span>
+                          {` · ${digestInfo.pointCount} ${digestInfo.pointCount === 1 ? 'point' : 'points'}`}
+                        </>
+                      )}
+                      {isDigest && !digestInfo && <span className="meta-strong">Digest</span>}
+                      {isDigest && ` · written ${dayMonth(shown.updated)}`}
+                      {isDigest && mineOnly && ai > 0 && ' · '}
+                      {mineOnly && ai > 0 && 'Generated sections hidden'}
+                    </p>
+                  )}
+                  <CiteContext.Provider value={cites}>
+                    <div className="blocks">
+                      {shown.blocks
+                        .filter((b) => !(b.kind === 'llm' && (mineOnly || (b.correctionFor && shownPoints.has(b.correctionFor)))))
+                        .map((b, i) =>
+                          b.kind === 'point' ? (
+                            <PointBlock
+                              key={`${b.id}-${i}`}
+                              block={b}
+                              fixes={mineOnly ? [] : fixes.get(b.id)}
+                              onJump={p.onJumpToPoint}
+                              onEdit={p.onEditPoint}
+                              onSetDeleted={p.onSetPointDeleted}
+                            />
+                          ) : b.kind === 'llm' ? (
+                            <LlmBlock key={`${b.id}-${i}`} block={b} label={isDigest ? 'Recap' : article ? 'AI' : 'Context'} />
+                          ) : (
+                            <RawBlock key={`raw-${i}`} text={b.text} />
+                          ),
+                        )}
+                    </div>
+                  </CiteContext.Provider>
+                </>
               )}
-              <CiteContext.Provider value={cites}>
-                <div className="blocks">
-                  {shown.blocks
-                    .filter((b) => !(b.kind === 'llm' && (mineOnly || (b.correctionFor && shownPoints.has(b.correctionFor)))))
-                    .map((b, i) =>
-                      b.kind === 'point' ? (
-                        <PointBlock
-                          key={`${b.id}-${i}`}
-                          block={b}
-                          fixes={mineOnly ? [] : fixes.get(b.id)}
-                          onJump={p.onJumpToPoint}
-                          onEdit={p.onEditPoint}
-                          onSetDeleted={p.onSetPointDeleted}
-                        />
-                      ) : b.kind === 'llm' ? (
-                        <LlmBlock key={`${b.id}-${i}`} block={b} label={isDigest ? 'Recap' : 'Context'} />
-                      ) : (
-                        <RawBlock key={`raw-${i}`} text={b.text} />
-                      ),
-                    )}
-                </div>
-              </CiteContext.Provider>
             </section>
             <nav className="outline" aria-label="Outline">
               {outlinePoints.length > 0 && (
@@ -520,6 +649,45 @@ export function NotePane(p: Props): React.JSX.Element {
                       </li>
                     );
                   })}
+                </ul>
+              )}
+            </section>
+
+            <section className="folder-sec" aria-labelledby="h-articles">
+              <div className="overview-head first">
+                <h2 id="h-articles" className="overview-title">
+                  Notes
+                </h2>
+                <button className="btn ghost" onClick={p.onNewArticle}>
+                  <PlusIcon size={13} /> New note
+                </button>
+              </div>
+              {p.articles.length === 0 ? (
+                <p className="muted small">Pick a few subtopics and the AI writes one note that ties them together. You can edit it.</p>
+              ) : (
+                <ul className="row-card" role="list" aria-label="Notes">
+                  {p.articles.map((a) => (
+                    <li key={a.slug}>
+                      <button className="topic-row-v2" onClick={() => p.onSelect(`${ARTICLE_PREFIX}${a.slug}`)}>
+                        <span className="row-tile" aria-hidden="true">
+                          <NoteIcon size={15} />
+                        </span>
+                        <span className="row-main">
+                          <span className="row-title">{a.title}</span>
+                          <span className="row-sub one">
+                            {[
+                              ...a.subtopics.map((slug) => p.subtopics.find((x) => x.slug === slug)?.title ?? slug),
+                              ...a.topics,
+                            ].join(' · ') || 'Note'}
+                          </span>
+                        </span>
+                        <span className="topic-count">
+                          {a.pointCount} {a.pointCount === 1 ? 'point' : 'points'}
+                        </span>
+                        <span className="mono topic-date">{a.updated ? dayMonth(a.updated) : ''}</span>
+                      </button>
+                    </li>
+                  ))}
                 </ul>
               )}
             </section>

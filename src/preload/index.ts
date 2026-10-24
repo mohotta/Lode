@@ -59,6 +59,13 @@ const api: LodeApi = {
     read: (vaultId, folder, digest) => call('digest:read')({ vaultId, folder, digest }),
     delete: (vaultId, folder, digest) => call('digest:delete')({ vaultId, folder, digest }),
   },
+  article: {
+    list: (vaultId, folder) => call('article:list')({ vaultId, folder }),
+    read: (vaultId, folder, article) => call('article:read')({ vaultId, folder, article }),
+    save: (vaultId, folder, article, edit) => call('article:save')({ vaultId, folder, article, ...edit }),
+    undo: (vaultId, folder, article) => call('article:undo')({ vaultId, folder, article }),
+    delete: (vaultId, folder, article) => call('article:delete')({ vaultId, folder, article }),
+  },
   link: {
     open: (url) => call('link:open')({ url }),
   },

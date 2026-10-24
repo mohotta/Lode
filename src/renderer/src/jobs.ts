@@ -9,6 +9,10 @@ export function progressText(p: ProgressView | null): string {
       return `${p.retry ? 'Retrying' : 'Asking the model'} (batch ${p.chunk} of ${p.chunks})…`;
     case 'searching':
       return `Searching: “${p.query}”`;
+    case 'drafting':
+      return p.round === 0 ? 'Writing the draft…' : `Fixing what check ${p.round} found…`;
+    case 'checking':
+      return `Checking for errors (round ${p.round} of up to ${p.rounds})…`;
     case 'writing':
       return `Writing ${p.subtopics} note(s)…`;
     case 'done':
@@ -18,6 +22,7 @@ export function progressText(p: ProgressView | null): string {
 
 export function jobTitle(j: JobView): string {
   if (j.kind === 'digest') return `Digest · ${j.digestTitle ?? j.digest ?? ''}`;
+  if (j.kind === 'article') return `${j.article ? 'AI edit' : 'Note'} · ${j.articleTitle ?? ''}`;
   return j.kind === 'regenerate' ? `Regenerate · ${j.subtopicTitle ?? j.subtopic ?? ''}` : `Generate · ${j.folderTitle}`;
 }
 
@@ -37,6 +42,7 @@ export function jobStatusText(j: JobView): string {
       if (!r) return 'Done';
       if (j.kind === 'regenerate') return 'Rewritten';
       if (j.kind === 'digest') return 'Written';
+      if (j.kind === 'article') return j.article ? 'Revised' : 'Written';
       return `Filed ${r.filed.length}${r.unfiled.length ? `, ${r.unfiled.length} unfiled` : ''}`;
     }
   }

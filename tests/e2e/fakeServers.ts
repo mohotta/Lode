@@ -57,7 +57,26 @@ export async function startFakes(): Promise<Fakes> {
       points: Array<{ id: string; text: string }>;
       regenerate?: { slug: string };
       period?: { title: string };
+      title?: string;
+      instruction?: string;
     };
+    if (data.title !== undefined) {
+      // Notes (articles): the checker passes every draft.
+      const reply = user.startsWith('Check the draft.')
+        ? { issues: [] }
+        : {
+            sections: [
+              {
+                heading: data.instruction ? 'Short version' : 'How Services work',
+                body: `A Service gives pods one stable virtual IP. [Service](${CITED_URL})`,
+                pointIds: data.points.map((p) => p.id),
+              },
+              ...(data.instruction ? [] : [{ heading: 'NetworkPolicy', body: 'Policies restrict which pods can talk.', pointIds: [] }]),
+            ],
+          };
+      res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: JSON.stringify(reply) } }], usage }));
+      return;
+    }
     if (data.period) {
       const digest = {
         summary: `Recap of ${data.period.title}: mostly Kubernetes networking.`,

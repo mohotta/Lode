@@ -35,6 +35,15 @@ describe('extractJson', () => {
     expect(extractJson('Sure! {"a":1} hope that helps')).toEqual({ a: 1 });
     expect(extractJson('nope')).toBeUndefined();
   });
+
+  it('keeps code fences inside string values (notes with code examples)', () => {
+    const reply = { sections: [{ heading: 'Hooks', body: 'Example:\n\n```tsx\nconst [a, setA] = useState(0);\n```\n\nDone.', pointIds: [] }] };
+    const raw = JSON.stringify(reply);
+    expect(extractJson(raw)).toEqual(reply);
+    expect(extractJson(`\`\`\`json\n${raw}\n\`\`\``)).toEqual(reply);
+    expect(extractJson(`Here you go:\n${raw}`)).toEqual(reply);
+    expect(extractJson('Here:\n```json\n{"a":1}\n```\nThanks')).toEqual({ a: 1 });
+  });
 });
 
 describe('chatUrl', () => {

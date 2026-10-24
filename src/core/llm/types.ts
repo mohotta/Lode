@@ -18,6 +18,29 @@ export interface GenerationPoint {
   date: string;
 }
 
+export interface ArticleIssue {
+  /** 1-based section number, or 0 for the note as a whole. */
+  section: number;
+  problem: string;
+  fix: string;
+}
+
+/** A note (article) job step: write it, check a draft, or revise a draft. */
+export interface ArticleTask {
+  mode: 'write' | 'check' | 'revise';
+  title: string;
+  /** The chosen subtopic notes as plain text; the user's points appear as `[point p-…]` lines. */
+  material: readonly { title: string; text: string }[];
+  /** Extra topics to cover that have no subtopic yet. */
+  topics: readonly string[];
+  /** The user's instruction for an AI edit. */
+  instruction?: string;
+  /** The current note as text (check and revise). */
+  draft?: string;
+  /** What the checker found (revise after a check). */
+  issues?: readonly ArticleIssue[];
+}
+
 export interface GenerationInput {
   folderTitle: string;
   points: readonly GenerationPoint[];
@@ -26,6 +49,8 @@ export interface GenerationInput {
   knownPoints?: readonly GenerationPoint[];
   /** Set for a digest: recap the points of this period instead of filing them. */
   digest?: { title: string; from: string; to: string };
+  /** Set for a note (article) step. */
+  article?: ArticleTask;
   /** Set for Regenerate: every point is already filed under this subtopic. */
   regenerate?: { slug: string; title: string };
   /** Set when retrying after invalid output, describing what was wrong. */

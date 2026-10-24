@@ -31,6 +31,8 @@ export type Block =
       correctionFor?: PointId;
       /** Set when the model judged point `id` to repeat the earlier point `of`. The body is fixed text. */
       duplicate?: { id: PointId; of: PointId };
+      /** Set when the user wrote or edited this text by hand (notes only); it is no longer pure model output. */
+      byUser?: true;
     }
   /** Text that is not a Lode block (e.g. an external edit). Preserved, rendered as plain text. */
   | { kind: 'raw'; text: string };
@@ -169,4 +171,21 @@ export interface DigestInfo {
   to: string;
   pointCount: number;
   updated: string;
+}
+
+/** A composed note ("Notes" in the folder overview): an AI-written article built from chosen subtopics. */
+export interface ArticleInfo {
+  slug: string;
+  title: string;
+  updated: string;
+  pointCount: number;
+  /** Subtopic slugs it was written from. */
+  subtopics: string[];
+  /** Extra topics the user asked to cover. */
+  topics: string[];
+}
+
+export interface ResolvedArticle extends ResolvedNote {
+  subtopics: string[];
+  topics: string[];
 }
