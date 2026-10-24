@@ -17,6 +17,8 @@ interface Props {
   placeholder?: string;
   className?: string;
   autoFocus?: boolean;
+  /** Long-form text (notes): Enter starts a new paragraph, only Ctrl+Enter submits, and `##` headings are kept. */
+  multiline?: boolean;
   /** Enter (outside code blocks and lists) or Ctrl+Enter. Receives markdown. */
   onSubmit(markdown: string): void;
   onEscape?(): void;
@@ -26,7 +28,7 @@ interface Props {
 
 const read = (e: Editor): string => (e.isEmpty ? '' : tidyMarkdown(e.getMarkdown()));
 
-/** WYSIWYG markdown editor for the user's own points (composer and inline edit). */
+/** WYSIWYG markdown editor for the user's own points (composer and inline edit) and note text. */
 export const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEditor(p, ref) {
   // Keep the latest callbacks without rebuilding the editor.
   const cb = useRef(p);
@@ -38,7 +40,7 @@ export const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEdito
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: { levels: [3, 4] },
+        heading: { levels: p.multiline ? [2, 3, 4] : [3, 4] },
         // Markdown has no underline; links open in the browser from the rendered point instead.
         underline: false,
         link: { openOnClick: false, autolink: true, protocols: ['http', 'https'] },
@@ -70,7 +72,7 @@ export const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEdito
           const name = $from.node(d).type.name;
           if (name === 'codeBlock' || name === 'listItem') nested = true;
         }
-        if (nested && !(event.ctrlKey || event.metaKey)) return false;
+        if ((nested || cb.current.multiline) && !(event.ctrlKey || event.metaKey)) return false;
         event.preventDefault();
         if (editorRef.current) cb.current.onSubmit(read(editorRef.current));
         return true;

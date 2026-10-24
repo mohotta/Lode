@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { JobView } from '@shared/ipc';
 import type {
+  ArticleInfo,
   BacklogDay,
   DigestInfo,
   DigestPeriod,
@@ -15,6 +16,7 @@ import { BacklogView } from './components/BacklogView';
 import { ConfirmHost } from './components/ConfirmHost';
 import { MissingVault } from './components/MissingVault';
 import { DigestPicker } from './components/DigestPicker';
+import { NewNoteDialog } from './components/NewNoteDialog';
 import { GenerateDialog, type DialogTarget } from './components/GenerateDialog';
 import { SettingsView } from './components/SettingsView';
 import { Scratchpad, type DuplicateInfo } from './components/Scratchpad';
@@ -27,7 +29,7 @@ import { TrashView } from './components/TrashView';
 import { CloseIcon, FolderIcon, WarnIcon } from './components/Icons';
 import { EmptyState } from './components/EmptyState';
 import appIcon from '../../../build/icon.svg';
-import { DIGEST_PREFIX, NotePane } from './components/NotePane';
+import { ARTICLE_PREFIX, DIGEST_PREFIX, NotePane } from './components/NotePane';
 import { isActive } from './jobs';
 import { Resizer } from './components/Resizer';
 import { BACKLOG, NOTE_MIN, SIDEBAR, usePaneWidths } from './layout';
@@ -50,6 +52,7 @@ const EMPTY_HISTORY: History = { items: [], i: -1 };
 const NO_DAYS: BacklogDay[] = [];
 const NO_SUBTOPICS: SubtopicInfo[] = [];
 const NO_DIGESTS: DigestInfo[] = [];
+const NO_ARTICLES: ArticleInfo[] = [];
 const samePlace = (a: Place | undefined, b: Place | undefined): boolean =>
   !!a && !!b && a.folder === b.folder && a.subtopic === b.subtopic;
 
@@ -76,13 +79,21 @@ export function App(): React.JSX.Element {
   const [vaultId, setVaultId] = useState<string | null>(null);
   const [folders, setFolders] = useState<FolderInfo[]>([]);
   const [history, setHistory] = useState<History>(EMPTY_HISTORY);
-  const [data, setData] = useState<{ key: string; days: BacklogDay[]; subtopics: SubtopicInfo[]; digests: DigestInfo[] }>({
+  const [data, setData] = useState<{
+    key: string;
+    days: BacklogDay[];
+    subtopics: SubtopicInfo[];
+    digests: DigestInfo[];
+    articles: ArticleInfo[];
+  }>({
     key: '',
     days: [],
     subtopics: [],
     digests: [],
+    articles: [],
   });
   const [pickingDigest, setPickingDigest] = useState(false);
+  const [pickingNote, setPickingNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [noteVersion, setNoteVersion] = useState(0);
@@ -111,6 +122,7 @@ export function App(): React.JSX.Element {
   const days = data.key === dataKey ? data.days : NO_DAYS;
   const subtopics = data.key === dataKey ? data.subtopics : NO_SUBTOPICS;
   const digests = data.key === dataKey ? data.digests : NO_DIGESTS;
+  const articles = data.key === dataKey ? data.articles : NO_ARTICLES;
 
   const guard = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
     try {
@@ -137,12 +149,13 @@ export function App(): React.JSX.Element {
   }, []);
 
   const load = useCallback(async (vid: string, slug: string): Promise<void> => {
-    const [d, s, g] = await Promise.all([
+    const [d, s, g, a] = await Promise.all([
       unwrap(lode.backlog.listDays(vid, slug)),
       unwrap(lode.notes.list(vid, slug)),
       unwrap(lode.digest.list(vid, slug)),
+      unwrap(lode.article.list(vid, slug)),
     ]);
-    setData({ key: `${vid}/${slug}`, days: d, subtopics: s, digests: g });
+    setData({ key: `${vid}/${slug}`, days: d, subtopics: s, digests: g, articles: a });
     setNoteVersion((v) => v + 1);
   }, []);
 
@@ -154,10 +167,11 @@ export function App(): React.JSX.Element {
       unwrap(lode.backlog.listDays(vaultId, folder)),
       unwrap(lode.notes.list(vaultId, folder)),
       unwrap(lode.digest.list(vaultId, folder)),
+      unwrap(lode.article.list(vaultId, folder)),
     ]).then(
-      ([d, s, g]) => {
+      ([d, s, g, a]) => {
         if (cancelled) return;
-        setData({ key: `${vaultId}/${folder}`, days: d, subtopics: s, digests: g });
+        setData({ key: `${vaultId}/${folder}`, days: d, subtopics: s, digests: g, articles: a });
         setNoteVersion((v) => v + 1);
       },
       (e: unknown) => !cancelled && setError(message(e)),
@@ -440,8 +454,45 @@ export function App(): React.JSX.Element {
       j.folder === folder &&
       (subtopic?.startsWith(DIGEST_PREFIX)
         ? j.kind === 'digest' && j.digest === subtopic.slice(DIGEST_PREFIX.length)
-        : j.kind === 'regenerate' && j.subtopic === subtopic),
+        : subtopic?.startsWith(ARTICLE_PREFIX)
+          ? j.kind === 'article' && j.article === subtopic.slice(ARTICLE_PREFIX.length)
+          : j.kind === 'regenerate' && j.subtopic === subtopic),
   );
+
+  const reviseArticle = (slug: string, title: string, instruction: string): void => {
+    if (!folder || !folderInfo) return;
+    setDialog({ kind: 'new', folder, folderTitle: folderInfo.title, article: { slug, title, subtopics: [], topics: [], instruction } });
+  };
+
+  const saveArticle = async (slug: string, edit: Parameters<typeof lode.article.save>[3]): Promise<boolean> => {
+    if (!vaultId || !folder) return false;
+    const ok = await guard(() => unwrap(lode.article.save(vaultId, folder, slug, edit)));
+    await refreshFolder();
+    return ok !== undefined;
+  };
+
+  const undoArticle = async (slug: string): Promise<void> => {
+    if (!vaultId || !folder) return;
+    await guard(() => unwrap(lode.article.undo(vaultId, folder, slug)));
+    await refreshFolder();
+  };
+
+  const deleteArticle = async (slug: string, title: string): Promise<void> => {
+    if (!vaultId || !folder) return;
+    const ok = await ask({
+      message: `Delete the note "${title}"?`,
+      detail: 'Your points and subtopics are not affected. A copy is kept in the vault history folder.',
+      confirmLabel: 'Delete note',
+      danger: true,
+    });
+    if (!ok) return;
+    await guard(async () => {
+      await unwrap(lode.article.delete(vaultId, folder, slug));
+      const key = `${ARTICLE_PREFIX}${slug}`;
+      setHistory((h) => rewrite(h, (pl) => (pl.folder === folder && pl.subtopic === key ? { folder, subtopic: null } : pl)));
+      await refreshFolder();
+    });
+  };
 
   const openDigestDialog = (id: string, title: string): void => {
     if (!folder || !folderInfo) return;
@@ -796,11 +847,16 @@ export function App(): React.JSX.Element {
             onSetPointDeleted={setPointDeleted}
             digests={digests}
             days={days}
-            onAddPoint={() => scratchRef.current?.focus()}
             filedIn={filedIn}
             onNewDigest={() => setPickingDigest(true)}
             onRegenerateDigest={openDigestDialog}
             onDeleteDigest={(id, title) => void deleteDigest(id, title)}
+            articles={articles}
+            onNewArticle={() => setPickingNote(true)}
+            onReviseArticle={reviseArticle}
+            onSaveArticle={saveArticle}
+            onUndoArticle={undoArticle}
+            onDeleteArticle={(slug, title) => void deleteArticle(slug, title)}
           />
         </>
       )}
@@ -842,9 +898,25 @@ export function App(): React.JSX.Element {
         />
       )}
 
+      {pickingNote && folder && folderInfo && (
+        <NewNoteDialog
+          folderTitle={folderInfo.title}
+          subtopics={subtopics}
+          onClose={() => setPickingNote(false)}
+          onPick={(req) => {
+            setPickingNote(false);
+            setDialog({ kind: 'new', folder, folderTitle: folderInfo.title, article: req });
+          }}
+        />
+      )}
+
       {dialog && vaultId && (
         <GenerateDialog
-          key={dialog.kind === 'job' ? dialog.jobId : `new-${dialog.folder}-${dialog.subtopic ?? ''}-${dialog.digest ?? ''}`}
+          key={
+            dialog.kind === 'job'
+              ? dialog.jobId
+              : `new-${dialog.folder}-${dialog.subtopic ?? ''}-${dialog.digest ?? ''}-${dialog.article ? JSON.stringify(dialog.article) : ''}`
+          }
           vaultId={vaultId}
           target={dialog}
           jobs={jobs}

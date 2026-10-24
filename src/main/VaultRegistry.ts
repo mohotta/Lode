@@ -3,6 +3,7 @@ import { mkdir, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { VaultInfo } from '@shared/types';
 import { SearchIndex } from '@core/index/SearchIndex';
+import { ArticleRepo } from '@core/repos/ArticleRepo';
 import { BacklogRepo } from '@core/repos/BacklogRepo';
 import { DigestRepo } from '@core/repos/DigestRepo';
 import { NoteRepo } from '@core/repos/NoteRepo';
@@ -22,6 +23,7 @@ export interface OpenVault {
   review: ReviewRepo;
   index: SearchIndex;
   digests: DigestRepo;
+  articles: ArticleRepo;
 }
 
 export function vaultIdFor(path: string): string {
@@ -106,6 +108,7 @@ export class VaultRegistry {
       trash: new TrashRepo(vault),
       review: new ReviewRepo(vault),
       digests: new DigestRepo(vault),
+      articles: new ArticleRepo(vault),
       index: new SearchIndex(vault, async () => new Map((await service.listFolders()).map((f) => [f.slug, f.title]))),
     };
     this.open.set(id, opened);

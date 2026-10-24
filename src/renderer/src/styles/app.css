@@ -4380,3 +4380,265 @@ select.set-input {
   color: var(--text-2);
   font-weight: 500;
 }
+
+/* ---------- Composed notes (articles) ---------- */
+.llm-body h2 {
+  margin: 0 0 0.5em;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+.llm-block.by-user > .margin-mark {
+  visibility: visible;
+}
+.llm-block.by-user .mark-ai {
+  border-style: dashed;
+  color: var(--text);
+}
+.btn.on {
+  border-color: var(--accent-fill);
+  color: var(--accent);
+}
+.rot90 {
+  transform: rotate(90deg);
+}
+.rot270 {
+  transform: rotate(270deg);
+}
+.text-input {
+  width: 100%;
+  padding: 7px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-doc);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+input.text-input {
+  height: 36px;
+}
+textarea.text-input {
+  resize: vertical;
+  line-height: 1.5;
+}
+.text-input:focus {
+  border-color: color-mix(in srgb, var(--accent-fill) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-fill) 14%, transparent);
+}
+.field-label {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.dialog.v2.new-note {
+  width: min(520px, calc(100vw - 32px));
+}
+.new-note .field {
+  margin: 0 0 14px;
+}
+.dlg-cap.row {
+  display: flex;
+  align-items: center;
+}
+.dlg-cap .push {
+  margin-left: auto;
+  font-size: 12.5px;
+}
+.pick-list {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pick-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-doc);
+  cursor: pointer;
+}
+.pick-opt:hover {
+  border-color: var(--line-strong);
+}
+.pick-opt.on {
+  border-color: var(--accent-fill);
+}
+.pick-opt input {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent-fill);
+}
+.pick-opt .row-title {
+  flex: 1;
+  min-width: 0;
+}
+.pick-note {
+  font-size: 12.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.chip-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 5px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-doc);
+}
+.chip-input:focus-within {
+  border-color: color-mix(in srgb, var(--accent-fill) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-fill) 14%, transparent);
+}
+.chip-input input {
+  flex: 1;
+  min-width: 140px;
+  height: 26px;
+  border: 0;
+  background: none;
+  outline: none;
+  font-size: 14px;
+}
+.topic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid var(--pill-line);
+  border-radius: 999px;
+  background: var(--pill);
+  font-size: 13px;
+}
+.topic-chip button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-3);
+}
+.topic-chip button:hover {
+  background: var(--line);
+  color: var(--text);
+}
+.ask-bar {
+  margin: 0 0 28px;
+  padding: 12px;
+  border: 1px solid var(--card-line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.ask-bar .text-input {
+  border: 0;
+  padding: 4px 6px;
+  background: none;
+  box-shadow: none;
+  font-size: 15px;
+}
+.ask-foot,
+.editor-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ask-foot .muted,
+.editor-foot .muted {
+  flex: 1;
+}
+.article-editor .title-input {
+  height: 44px;
+  font-size: 20px;
+  font-weight: 600;
+}
+.article-editor > .field {
+  margin: 0 0 12px;
+}
+.edit-list {
+  display: flex;
+  flex-direction: column;
+}
+.edit-item {
+  padding: 10px 12px 12px;
+  border: 1px solid var(--card-line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.edit-item.text {
+  border-style: dashed;
+  background: none;
+}
+.edit-item .composer {
+  margin: 0;
+}
+.edit-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.edit-tools {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.mark-you {
+  padding: 1px 9px;
+  border: 1px solid var(--pill-line);
+  border-radius: 999px;
+  background: var(--pill);
+  font: 500 12px/1.6 var(--font);
+  color: var(--text);
+}
+.prose.locked {
+  font-size: 15px;
+  font-weight: 500;
+}
+.add-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  height: 24px;
+  margin: 4px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-3);
+  font-size: 12.5px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.add-text:hover,
+.add-text:focus-visible,
+.edit-list > .add-text:only-child {
+  opacity: 1;
+  background: color-mix(in srgb, var(--accent-fill) 8%, transparent);
+  color: var(--accent);
+}
+.editor-foot {
+  position: sticky;
+  bottom: 0;
+  margin-top: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  background: var(--bg-doc);
+}

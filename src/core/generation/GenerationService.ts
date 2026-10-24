@@ -49,6 +49,9 @@ export type ProgressEvent =
   | { phase: 'collecting' }
   | { phase: 'calling'; chunk: number; chunks: number; retry: boolean }
   | { phase: 'searching'; query: string }
+  /** Notes: the first draft (round 0) or a revision after check `round`. */
+  | { phase: 'drafting'; round: number }
+  | { phase: 'checking'; round: number; rounds: number }
   | { phase: 'writing'; subtopics: number }
   | { phase: 'done' };
 

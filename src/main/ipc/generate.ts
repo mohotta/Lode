@@ -2,8 +2,9 @@ import { BrowserWindow, app, net } from 'electron';
 import { z } from 'zod';
 import { atomicWrite } from '@core/fs/atomicWrite';
 import { readTextOrNull } from '@core/fs/readText';
+import { ArticleService, type ArticleRequest } from '@core/generation/ArticleService';
 import { GenerationCancelled, GenerationService, type GenerationReport } from '@core/generation/GenerationService';
-import { JobQueue } from '@core/generation/JobQueue';
+import { JobQueue, type JobSpec } from '@core/generation/JobQueue';
 import { periodRange } from '@core/formats/period';
 import { OpenAiCompatibleAdapter } from '@core/llm/openaiCompatible';
 import { TavilySearch } from '@core/llm/tavily';
@@ -24,7 +25,7 @@ async function logRun(
   folder: string,
   model: string,
   report: GenerationReport,
-  kind: 'generate' | 'regenerate' | 'digest',
+  kind: 'generate' | 'regenerate' | 'digest' | 'article',
 ): Promise<void> {
   // Local usage log (PRD cost transparency). Counts only: no point text, no keys.
   const path = await v.vault.path(LODE_DIR, 'runs.json');
@@ -53,7 +54,9 @@ async function logRun(
 }
 
 export function registerGenerateHandlers(registry: VaultRegistry, settings: SettingsStore, keys: KeyStore): void {
-  async function build(v: OpenVault): Promise<{ gen: GenerationService; blocker: string | null; model: string; baseUrl: string }> {
+  async function build(
+    v: OpenVault,
+  ): Promise<{ gen: GenerationService; articles: ArticleService; blocker: string | null; model: string; baseUrl: string }> {
     const s = await settings.get();
     const hasTavily = await keys.has('tavily');
     const search =
@@ -74,15 +77,29 @@ export function registerGenerateHandlers(registry: VaultRegistry, settings: Sett
       adapter,
       settings: { ...s.generation, useSearch: s.generation.useSearch && hasTavily },
     });
+    const articles = new ArticleService({
+      // Invariant 1 again: notes read the backlog through the read-only view.
+      backlog: v.backlog.asReadonly((folder) => v.notes.filing(folder)),
+      notes: v.notes,
+      articles: v.articles,
+      adapter,
+      settings: { ...s.generation, useSearch: s.generation.useSearch && hasTavily },
+    });
     let blocker: string | null = null;
     if (!s.llm.model) blocker = 'Choose a model in Settings first.';
     else if (!net.isOnline()) blocker = 'You appear to be offline. Capture still works; Generate needs a connection.';
-    return { gen, blocker, model: s.llm.model, baseUrl: s.llm.baseUrl };
+    return { gen, articles, blocker, model: s.llm.model, baseUrl: s.llm.baseUrl };
   }
 
   async function folderTitle(v: OpenVault, folder: string): Promise<string> {
     return (await v.service.listFolders()).find((f) => f.slug === folder)?.title ?? folder;
   }
+
+  const articleRequest = (spec: JobSpec): ArticleRequest => ({
+    title: spec.articleTitle ?? '',
+    subtopics: spec.articleSubtopics ?? [],
+    topics: spec.articleTopics ?? [],
+  });
 
   const OVER_CAP = 'This run exceeds the token ceiling in Settings. Raise it or generate in smaller batches.';
 
@@ -90,9 +107,26 @@ export function registerGenerateHandlers(registry: VaultRegistry, settings: Sett
   const queue = new JobQueue<GenerationReport>(
     async (spec, signal, onProgress) => {
       const v = await registry.get(spec.vaultId);
-      const { gen, blocker, model } = await build(v);
+      const { gen, articles, blocker, model } = await build(v);
       if (blocker) throw new Error(blocker);
       const title = await folderTitle(v, spec.folder);
+      if (spec.kind === 'article') {
+        try {
+          const preview = spec.article
+            ? await articles.previewRevise(spec.folder, spec.article, spec.instruction ?? '')
+            : await articles.previewCreate(spec.folder, articleRequest(spec));
+          if (preview.overCap) throw new Error(OVER_CAP);
+          const report = spec.article
+            ? await articles.revise(spec.folder, title, spec.article, spec.instruction ?? '', signal, onProgress)
+            : await articles.create(spec.folder, title, articleRequest(spec), signal, onProgress);
+          await logRun(v, spec.folder, model, report, 'article').catch(() => undefined);
+          return report;
+        } catch (err) {
+          if (err instanceof GenerationCancelled) throw err;
+          const prefix = spec.article ? 'AI edit failed, the note is unchanged.' : 'Note failed, nothing was written.';
+          throw new Error(`${prefix} ${err instanceof Error ? err.message : ''}`.trim(), { cause: err });
+        }
+      }
       try {
         const { subtopic: sub, digest } = spec;
         const preview = digest
@@ -125,11 +159,26 @@ export function registerGenerateHandlers(registry: VaultRegistry, settings: Sett
     (err) => err instanceof GenerationCancelled,
   );
 
-  handle('generate:preview', async ({ vaultId, folder, subtopic, digest }): Promise<PreviewView> => {
+  handle('generate:preview', async ({ vaultId, folder, subtopic, digest, article }): Promise<PreviewView> => {
     const v = await registry.get(vaultId);
     const s = await settings.get();
-    const { gen, blocker, model, baseUrl } = await build(v);
+    const { gen, articles, blocker, model, baseUrl } = await build(v);
     const title = await folderTitle(v, folder);
+    if (article) {
+      const p = article.slug
+        ? await articles.previewRevise(folder, article.slug, article.instruction ?? '')
+        : await articles.previewCreate(folder, { title: article.title ?? '', subtopics: article.subtopics, topics: article.topics });
+      return {
+        ...p,
+        kind: 'article',
+        searchUnavailable: s.generation.useSearch && !(await keys.has('tavily')),
+        maxInputTokens: s.generation.maxInputTokens,
+        provider: 'OpenAI-compatible',
+        model,
+        baseUrl,
+        blocker: blocker ?? (p.overCap ? OVER_CAP : null),
+      };
+    }
     const p = digest
       ? await gen.previewDigest(folder, title, digest)
       : subtopic
@@ -157,11 +206,35 @@ export function registerGenerateHandlers(registry: VaultRegistry, settings: Sett
     };
   });
 
-  handle('generate:enqueue', async ({ vaultId, folder, subtopic, digest }) => {
+  handle('generate:enqueue', async ({ vaultId, folder, subtopic, digest, article }) => {
     const v = await registry.get(vaultId);
     const { blocker } = await build(v);
     if (blocker) throw new Error(blocker);
     const title = await folderTitle(v, folder);
+    if (article) {
+      if (article.slug) {
+        const a = await v.articles.read(folder, article.slug);
+        if (!a) throw new Error('Note not found');
+        return queue.enqueue({
+          vaultId,
+          folder,
+          folderTitle: title,
+          kind: 'article',
+          article: article.slug,
+          articleTitle: a.meta.title,
+          instruction: article.instruction ?? '',
+        });
+      }
+      return queue.enqueue({
+        vaultId,
+        folder,
+        folderTitle: title,
+        kind: 'article',
+        articleTitle: (article.title ?? '').trim(),
+        articleSubtopics: article.subtopics,
+        articleTopics: article.topics,
+      });
+    }
     if (digest) {
       const range = periodRange(digest);
       if (!range) throw new Error('Invalid digest period');

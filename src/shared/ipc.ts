@@ -15,6 +15,17 @@ const pointId = z.string().regex(/^p-[0-9a-z]{8}$/);
 const jobId = z.string().regex(/^j-[0-9a-f]{8,16}$/);
 /** A digest period: ISO week `2026-W42` or month `2026-10`. */
 const digestId = z.string().regex(/^\d{4}-(?:W(?:0[1-9]|[1-4]\d|5[0-3])|(?:0[1-9]|1[0-2]))$/);
+/** A note (article) job: create from `title`/`subtopics`/`topics`, or with `slug` edit that note with AI. */
+const articleJob = z
+  .object({
+    slug: slug.optional(),
+    title: z.string().min(1).max(120).optional(),
+    subtopics: z.array(slug).max(50).default([]),
+    topics: z.array(z.string().min(1).max(120)).max(20).default([]),
+    instruction: z.string().min(1).max(2000).optional(),
+  })
+  .refine((a) => (a.slug ? !!a.instruction : !!a.title), 'An AI edit needs a note and an instruction; a new note needs a title.');
+const blockRef = z.string().min(1).max(40).regex(/^[\w-]+$/);
 const STAMP = '\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z';
 const SLUG = '[a-z0-9]+(?:-[a-z0-9]+)*';
 /** A path inside `.lode/trash/` as returned by `trash:list`; re-checked in core before any fs call. */
@@ -69,6 +80,27 @@ export const Schemas = {
   'digest:list': z.object({ vaultId, folder: slug }),
   'digest:read': z.object({ vaultId, folder: slug, digest: digestId }),
   'digest:delete': z.object({ vaultId, folder: slug, digest: digestId }),
+  'article:list': z.object({ vaultId, folder: slug }),
+  'article:read': z.object({ vaultId, folder: slug, article: slug }),
+  /** The user's hand edit. Points can be moved or removed, never added; text without `body` is unchanged. */
+  'article:save': z.object({
+    vaultId,
+    folder: slug,
+    article: slug,
+    /** The note's `updated` when editing began; a newer note is not overwritten. */
+    expected: z.string().max(40),
+    title: z.string().min(1).max(120).optional(),
+    blocks: z
+      .array(
+        z.discriminatedUnion('kind', [
+          z.object({ kind: z.literal('point'), id: pointId }),
+          z.object({ kind: z.literal('text'), id: blockRef.optional(), body: z.string().max(40000).optional() }),
+        ]),
+      )
+      .max(500),
+  }),
+  'article:undo': z.object({ vaultId, folder: slug, article: slug }),
+  'article:delete': z.object({ vaultId, folder: slug, article: slug }),
   'link:open': z.object({ url: z.string().url().max(2048) }),
   'settings:get': z.object({}),
   'settings:set': z.object({
@@ -91,8 +123,9 @@ export const Schemas = {
   'keys:clear': z.object({ id: keyId }),
   /** With `subtopic`, previews a Regenerate of that note instead of a Generate. */
   /** With `digest`, previews a digest for that period. */
-  'generate:preview': z.object({ vaultId, folder: slug, subtopic: slug.optional(), digest: digestId.optional() }),
-  'generate:enqueue': z.object({ vaultId, folder: slug, subtopic: slug.optional(), digest: digestId.optional() }),
+  /** With `article`, previews creating a note or an AI edit of one. */
+  'generate:preview': z.object({ vaultId, folder: slug, subtopic: slug.optional(), digest: digestId.optional(), article: articleJob.optional() }),
+  'generate:enqueue': z.object({ vaultId, folder: slug, subtopic: slug.optional(), digest: digestId.optional(), article: articleJob.optional() }),
   'generate:jobs': z.object({}),
   'generate:cancel': z.object({ jobId }),
   'generate:dismiss': z.object({ jobId }),
@@ -118,7 +151,7 @@ export interface SettingsView {
   allowWeakKeyStorage: boolean;
 }
 
-export type JobKind = 'generate' | 'regenerate' | 'digest';
+export type JobKind = 'generate' | 'regenerate' | 'digest' | 'article';
 
 export interface PreviewView {
   kind: JobKind;
@@ -163,6 +196,10 @@ export interface JobView {
   /** Digest jobs: the period ID and its title. */
   digest?: string;
   digestTitle?: string;
+  /** Note jobs: the note's slug (AI edit; for a new note it is in the report), title and instruction. */
+  article?: string;
+  articleTitle?: string;
+  instruction?: string;
   status: JobStatus;
   progress: ProgressView | null;
   report?: RunReportView;
@@ -180,5 +217,7 @@ export type ProgressView =
   | { phase: 'collecting' }
   | { phase: 'calling'; chunk: number; chunks: number; retry: boolean }
   | { phase: 'searching'; query: string }
+  | { phase: 'drafting'; round: number }
+  | { phase: 'checking'; round: number; rounds: number }
   | { phase: 'writing'; subtopics: number }
   | { phase: 'done' };

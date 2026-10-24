@@ -31,7 +31,7 @@ const POINT_LINE_RE = /^\{\{point:(p-[0-9a-z]{8})\}\}$/;
 const LLM_OPEN_RE = /^::llm\{(.*)\}$/;
 const LLM_CLOSE = '::';
 const ATTR_RE = /([a-zA-Z][\w-]*)=(?:"([^"]*)"|([^\s"}]+))/g;
-const BARE_ATTRS = new Set(['id', 'kind', 'for', 'of']);
+const BARE_ATTRS = new Set(['id', 'kind', 'for', 'of', 'by']);
 const LINK_RE = /\[([^\]\n]*)\]\((https?:\/\/[^\s)]+)\)/g;
 
 export function parseAttrs(raw: string): Record<string, string> {
@@ -102,6 +102,7 @@ export function parseNoteBody(body: string): Block[] {
           ...(attrs.kind === 'duplicate' && forId && isPointId(forId) && ofId && isPointId(ofId)
             ? { duplicate: { id: forId, of: ofId } }
             : {}),
+          ...(attrs.by === 'you' ? { byUser: true as const } : {}),
         });
         i = close;
         continue;
@@ -126,6 +127,7 @@ export function serialiseBlock(block: Block): string {
       const attrs: Record<string, string> = { id: block.id };
       if (block.correctionFor) Object.assign(attrs, { kind: 'correction', for: block.correctionFor });
       else if (block.duplicate) Object.assign(attrs, { kind: 'duplicate', for: block.duplicate.id, of: block.duplicate.of });
+      if (block.byUser) attrs.by = 'you';
       Object.assign(attrs, { model: block.model, at: block.at });
       return `::llm{${renderAttrs(attrs)}}\n${block.body}\n${LLM_CLOSE}`;
     }

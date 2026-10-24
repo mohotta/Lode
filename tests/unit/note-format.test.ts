@@ -124,4 +124,12 @@ describe('retitleNote', () => {
     expect(body(next)).toBe(body(SAMPLE));
     expect(parseNote(next, { folder: 'f', subtopic: 's' }).meta.title).toBe('Service networking & kube-proxy');
   });
+
+  it('round-trips a block the user edited (by=you) and leaves other blocks unmarked', () => {
+    const doc = `---\nfolder: f\nsubtopic: s\ntitle: T\nupdated: 2026-10-18T09:00:00.000Z\n---\n\n::llm{id=b-01 by=you model="you" at="2026-10-18T09:00:00.000Z"}\nMy words\n::\n`;
+    const n = parseNote(doc, { folder: 'f', subtopic: 's' });
+    expect(n.blocks[0]).toMatchObject({ kind: 'llm', byUser: true, body: 'My words' });
+    expect(serialiseNote(n)).toBe(doc);
+    expect(parseNote(SAMPLE, { folder: 'f', subtopic: 's' }).blocks[1]).not.toHaveProperty('byUser');
+  });
 });

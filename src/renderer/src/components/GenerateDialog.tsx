@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { JobView, PreviewView } from '@shared/ipc';
 import { lode, unwrap } from '../api';
 import { progressText } from '../jobs';
-import { ArrowUpRightIcon, DigestIcon, InfoIcon, MinimizeIcon, RefreshIcon, SparkIcon } from './Icons';
+import { ArrowUpRightIcon, DigestIcon, InfoIcon, MinimizeIcon, NoteIcon, RefreshIcon, SparkIcon } from './Icons';
 
 /** What the dialog shows: a preview to confirm, or an existing background job. */
 export type DialogTarget =
@@ -15,6 +15,8 @@ export type DialogTarget =
       /** A digest period ID instead of a Generate or Regenerate. */
       digest?: string;
       digestTitle?: string;
+      /** A composed note: a new one (title, subtopics, topics) or, with `slug`, an AI edit. */
+      article?: { slug?: string; title: string; subtopics: string[]; topics: string[]; instruction?: string };
     }
   | { kind: 'job'; jobId: string };
 
@@ -47,25 +49,42 @@ export function GenerateDialog(p: Props): React.JSX.Element {
   const newFolder = target.kind === 'new' ? target.folder : null;
   const newSubtopic = target.kind === 'new' ? target.subtopic : undefined;
   const newDigest = target.kind === 'new' ? target.digest : undefined;
+  const newArticle = target.kind === 'new' ? target.article : undefined;
+  // Stable across renders, so the preview runs once per request.
+  const articleKey = newArticle ? JSON.stringify(newArticle) : '';
   const job = target.kind === 'job' ? p.jobs.find((j) => j.id === target.jobId) : undefined;
   const isRegen = target.kind === 'new' ? !!target.subtopic : job?.kind === 'regenerate';
   const isDigest = target.kind === 'new' ? !!target.digest : job?.kind === 'digest';
-  const title = isDigest ? 'Write digest' : isRegen ? 'Regenerate notes' : 'Generate notes';
+  const isArticle = target.kind === 'new' ? !!target.article : job?.kind === 'article';
+  const isRevise = isArticle && (target.kind === 'new' ? !!target.article?.slug : !!job?.article);
+  const title = isArticle
+    ? isRevise
+      ? 'Edit note with AI'
+      : 'Write note'
+    : isDigest
+      ? 'Write digest'
+      : isRegen
+        ? 'Regenerate notes'
+        : 'Generate notes';
   const subtitle =
     target.kind === 'new'
-      ? target.digest
+      ? target.article
+        ? `${target.folderTitle} · ${target.article.title}`
+        : target.digest
         ? `${target.folderTitle} · ${target.digestTitle ?? target.digest}`
         : target.subtopic
           ? (target.subtopicTitle ?? target.subtopic)
           : `${target.folderTitle} · files your unfiled points into subtopics`
       : job
-        ? job.kind === 'digest'
+        ? job.kind === 'article'
+          ? `${job.folderTitle} · ${job.articleTitle ?? ''}`
+          : job.kind === 'digest'
           ? `${job.folderTitle} · ${job.digestTitle ?? job.digest}`
           : job.kind === 'regenerate'
             ? (job.subtopicTitle ?? job.subtopic ?? '')
             : job.folderTitle
         : '';
-  const jobTarget = newDigest ? { digest: newDigest } : newSubtopic ? { subtopic: newSubtopic } : {};
+  const jobTarget = newArticle ? { article: newArticle } : newDigest ? { digest: newDigest } : newSubtopic ? { subtopic: newSubtopic } : {};
 
   useEffect(() => {
     ref.current?.showModal();
@@ -74,14 +93,21 @@ export function GenerateDialog(p: Props): React.JSX.Element {
   useEffect(() => {
     if (newFolder === null) return;
     let cancelled = false;
-    unwrap(lode.generate.preview(vaultId, newFolder, newDigest ? { digest: newDigest } : newSubtopic ? { subtopic: newSubtopic } : {})).then(
+    const t = articleKey
+      ? { article: JSON.parse(articleKey) as NonNullable<typeof newArticle> }
+      : newDigest
+        ? { digest: newDigest }
+        : newSubtopic
+          ? { subtopic: newSubtopic }
+          : {};
+    unwrap(lode.generate.preview(vaultId, newFolder, t)).then(
       (preview) => !cancelled && setState({ s: 'preview', preview, busy: false }),
       (e: unknown) => !cancelled && setState({ s: 'error', message: e instanceof Error ? e.message : String(e) }),
     );
     return () => {
       cancelled = true;
     };
-  }, [vaultId, newFolder, newSubtopic, newDigest]);
+  }, [vaultId, newFolder, newSubtopic, newDigest, articleKey]);
 
   const close = (): void => {
     ref.current?.close();
@@ -119,7 +145,15 @@ export function GenerateDialog(p: Props): React.JSX.Element {
     >
       <div className="dlg-head">
         <span className="dlg-icon" aria-hidden="true">
-          {isDigest ? <DigestIcon size={15} /> : isRegen ? <RefreshIcon size={15} /> : <SparkIcon size={15} />}
+          {isArticle ? (
+            isRevise ? <SparkIcon size={15} /> : <NoteIcon size={15} />
+          ) : isDigest ? (
+            <DigestIcon size={15} />
+          ) : isRegen ? (
+            <RefreshIcon size={15} />
+          ) : (
+            <SparkIcon size={15} />
+          )}
         </span>
         <div>
           <h2 id="gen-title">{title}</h2>
@@ -141,7 +175,7 @@ export function GenerateDialog(p: Props): React.JSX.Element {
             <div className="stat-tiles">
               <div className="stat-tile">
                 <div className="stat-num">{fmt(state.preview.points)}</div>
-                <div className="stat-cap">{isDigest ? 'points in period' : isRegen ? 'points' : 'unfiled points'}</div>
+                <div className="stat-cap">{isArticle ? 'your points' : isDigest ? 'points in period' : isRegen ? 'points' : 'unfiled points'}</div>
               </div>
               <div className="stat-tile">
                 <div className="stat-num">~{kfmt(state.preview.estimatedInputTokens)}</div>
@@ -165,7 +199,41 @@ export function GenerateDialog(p: Props): React.JSX.Element {
             {!isDigest && state.preview.searchUnavailable && (
               <p className="dlg-note">No Tavily key is saved, so AI additions can't cite sources this run.</p>
             )}
-            {isRegen || isDigest ? (
+            {newArticle ? (
+              <>
+                <div className="dlg-cap">What gets sent</div>
+                <ul className="sent-list">
+                  {isRevise ? (
+                    <li>
+                      <ArrowUpRightIcon size={13} />
+                      The whole note and your instruction
+                    </li>
+                  ) : (
+                    newArticle.subtopics.length > 0 && (
+                      <li>
+                        <ArrowUpRightIcon size={13} />
+                        {newArticle.subtopics.length} {newArticle.subtopics.length === 1 ? 'subtopic' : 'subtopics'}: their AI text and
+                        your {fmt(state.preview.points)} {state.preview.points === 1 ? 'point' : 'points'}
+                      </li>
+                    )
+                  )}
+                  {!isRevise && newArticle.topics.length > 0 && (
+                    <li>
+                      <ArrowUpRightIcon size={13} />
+                      Extra topics: {newArticle.topics.join(', ')}
+                    </li>
+                  )}
+                </ul>
+                <div className="dlg-callout">
+                  <InfoIcon size={15} />
+                  <span>
+                    {isRevise
+                      ? 'The AI may rewrite the whole note, including text you edited, then checks it for errors and fixes them (up to 3 rounds). The current version is kept, so you can undo.'
+                      : 'The AI writes a draft, then checks it for errors and fixes them (up to 3 rounds) before saving. Your points are referenced, never copied or changed.'}
+                  </span>
+                </div>
+              </>
+            ) : isRegen || isDigest ? (
               <div className="dlg-callout">
                 <InfoIcon size={15} />
                 <span>
@@ -217,7 +285,7 @@ export function GenerateDialog(p: Props): React.JSX.Element {
               onClick={() => void start(state.preview)}
               autoFocus
             >
-              {isDigest ? 'Write digest' : isRegen ? 'Regenerate' : 'Generate'}
+              {isArticle ? (isRevise ? 'Revise note' : 'Write note') : isDigest ? 'Write digest' : isRegen ? 'Regenerate' : 'Generate'}
             </button>
           </div>
         </>
@@ -282,7 +350,11 @@ export function GenerateDialog(p: Props): React.JSX.Element {
         <>
           <div className="dlg-body">
             <p role="status">
-              {job.kind === 'digest'
+              {job.kind === 'article'
+                ? job.article
+                  ? 'Revised the note. The previous version can be restored with Undo last change.'
+                  : 'Wrote the note.'
+                : job.kind === 'digest'
                 ? `Wrote the digest from ${job.report.filed.length} point(s).`
                 : job.kind === 'regenerate'
                 ? `Rewrote the AI sections for ${job.report.filed.length} point(s). The previous version can be restored with Undo regenerate.`
@@ -301,7 +373,10 @@ export function GenerateDialog(p: Props): React.JSX.Element {
                     <button
                       className="chip filed"
                       onClick={() => {
-                        p.onOpenSubtopic(job.folder, job.kind === 'digest' ? `digest:${c.slug}` : c.slug);
+                        p.onOpenSubtopic(
+                          job.folder,
+                          job.kind === 'digest' ? `digest:${c.slug}` : job.kind === 'article' ? `article:${c.slug}` : c.slug,
+                        );
                         closeFinished();
                       }}
                     >
